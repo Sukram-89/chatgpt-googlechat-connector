@@ -8,20 +8,105 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const model = process.env.OPENAI_MODEL || "gpt-4o-mini";
 const threadMemory = new Map<string, string[]>();
 
-app.post("/", async (req, res) => {
-  try {
-    const text = req.body?.message?.text || "";
-    const thread = req.body?.message?.thread?.name || "default";
-    const botName = req.body?.space?.displayName || "";
+type GoogleChatEvent = {
+  type?: string;
+  space?: {
+    name?: string;
+    type?: string;
+    displayName?: string;
+  };
+  message?: {
+    name?: string;
+    text?: string;
+    argumentText?: string;
+    thread?: {
+      name?: string;
+    };
+    annotations?: Array<{
+      type?: string;
+      startIndex?: number;
+      length?: number;
+      userMention?: {
+        type?: string;
+        user?: {
+          name?: string;
+          displayName?: string;
+        };
+      };
+    }>;
+  };
+};
 
-    if (!text.includes("@") && !text.toLowerCase().includes(botName.toLowerCase())) {
+function shouldRespond(event: GoogleChatEvent): boolean {
+  if (event.type !== "MESSAGE") {
+    return false;
+  }
+
+  // In direct messages, every message is intended for the app.
+  if (event.space?.type === "DM") {
+    return true;
+  }
+
+  // In spaces, respond only when the app is explicitly mentioned.
+  return Boolean(
+    event.message?.annotations?.some(
+      (annotation) =>
+        annotation.type === "USER_MENTION" &&
+        annotation.userMention?.type === "MENTION"
+    )
+  );
+}
+
+function getPrompt(event: GoogleChatEvent): string {
+  // Google Chat usually provides argumentText with the app mention removed.
+  const argumentText = event.message?.argumentText?.trim();
+  if (argumentText) {
+    return argumentText;
+  }
+
+  const text = event.message?.text || "";
+  return text.replace(/<users\/.+?>/g, "").replace(/^@\S+\s*/, "").trim();
+}
+
+app.get("/", (_req, res) => {
+  res.json({ status: "ok" });
+});
+
+app.post("/", async (req, res) => {
+  const event = req.body as GoogleChatEvent;
+
+  console.log(
+    JSON.stringify({
+      eventType: event.type,
+      spaceType: event.space?.type,
+      messageName: event.message?.name,
+      text: event.message?.text,
+      argumentText: event.message?.argumentText,
+      annotations: event.message?.annotations?.map((annotation) => ({
+        type: annotation.type,
+        userMentionType: annotation.userMention?.type,
+        userDisplayName: annotation.userMention?.user?.displayName
+      }))
+    })
+  );
+
+  try {
+    if (event.type === "ADDED_TO_SPACE") {
+      return res.json({ text: "Hi! Mention me in a space, or message me directly, and I’ll answer." });
+    }
+
+    if (!shouldRespond(event)) {
       return res.json({});
     }
 
-    const cleaned = text.replace(/<users\/.+?>/g, "").trim();
+    const prompt = getPrompt(event);
+    if (!prompt) {
+      return res.json({ text: "How can I help?" });
+    }
 
+    const thread = event.message?.thread?.name || event.space?.name || "default";
     const history = threadMemory.get(thread) || [];
-    history.push(`user: ${cleaned}`);
+    history.push(`user: ${prompt}`);
 
     const response = await openai.responses.create({
       model,
@@ -32,9 +117,10 @@ app.post("/", async (req, res) => {
     history.push(`assistant: ${reply}`);
     threadMemory.set(thread, history.slice(-10));
 
-    res.json({ text: reply });
+    return res.json({ text: reply });
   } catch (error) {
-    res.json({ text: "AI service unavailable right now." });
+    console.error(error);
+    return res.json({ text: "AI service unavailable right now. Check the Cloud Run logs for details." });
   }
 });
 
