@@ -24,6 +24,10 @@ async function getCurrentAssignment(collection: string) {
   return doc.exists ? doc.data() : null;
 }
 
+async function saveAssignment(collection: string, month: string, payload: Record<string, unknown>) {
+  await db.collection(collection).doc(month).set(payload, { merge: true });
+}
+
 app.get("/", (_req, res) => {
   res.json({ status: "ok" });
 });
@@ -36,6 +40,18 @@ app.get("/help", (_req, res) => {
 
 app.get("/admin", (_req, res) => {
   res.sendFile(path.join(process.cwd(), "src", "admin.html"));
+});
+
+app.post("/api/linkedin-assignment", async (req, res) => {
+  const { month, displayName, chatUserId } = req.body;
+  await saveAssignment("linkedin_assignments", month, { displayName, chatUserId });
+  res.json({ saved: true });
+});
+
+app.post("/api/activity-assignment", async (req, res) => {
+  const { month, displayName, activityDate, chatUserId } = req.body;
+  await saveAssignment("activity_assignments", month, { displayName, activityDate, chatUserId });
+  res.json({ saved: true });
 });
 
 app.get("/api/linkedinlist", async (_req, res) => {
@@ -56,12 +72,23 @@ app.get("/activitynow", async (_req, res) => {
 
 app.post("/scheduler/linkedin", async (_req, res) => {
   const current = await getCurrentAssignment("linkedin_assignments");
-  res.json({ message: `Hey ${current?.displayName || "someone"} is now responsible for the LinkedIn posts.` });
+  const mention = current?.chatUserId ? `<users/${current.chatUserId}>` : current?.displayName || "someone";
+
+  res.json({
+    message: `Hey ${mention} is now responsible for the LinkedIn posts.`
+  });
 });
 
 app.post("/scheduler/activity", async (_req, res) => {
   const current = await getCurrentAssignment("activity_assignments");
-  res.json({ message: `Hey the monthly activity is scheduled, responsible is ${current?.displayName || "someone"}.` });
+  const mention = current?.chatUserId ? `<users/${current.chatUserId}>` : current?.displayName || "someone";
+
+  res.json({
+    message: `Hey the monthly activity is at ${current?.activityDate || "TBD"}, and responsible is ${mention}.`,
+    dmMessage: current?.displayName
+      ? `Hi ${current.displayName}, you're responsible this month.`
+      : null
+  });
 });
 
 app.get("/linkedin/auth", (_req, res) => {
@@ -86,33 +113,33 @@ app.get("/linkedin/auth", (_req, res) => {
 });
 
 app.get("/linkedin/callback", (req, res) => {
-    const { code, state, error, error_description } = req.query;
+  const { code, state, error, error_description } = req.query;
 
-    console.log(JSON.stringify({
-      type: "linkedin_callback",
-      hasCode: Boolean(code),
-      hasState: Boolean(state),
-      error,
-      errorDescription: error_description
-    }));
+  console.log(JSON.stringify({
+    type: "linkedin_callback",
+    hasCode: Boolean(code),
+    hasState: Boolean(state),
+    error,
+    errorDescription: error_description
+  }));
 
-    if (error) {
-      return res.status(400).json({ error, errorDescription: error_description });
-    }
+  if (error) {
+    return res.status(400).json({ error, errorDescription: error_description });
+  }
 
-    if (!state || state !== linkedInOauthState) {
-      return res.status(400).json({ error: "Invalid OAuth state" });
-    }
+  if (!state || state !== linkedInOauthState) {
+    return res.status(400).json({ error: "Invalid OAuth state" });
+  }
 
-    if (!code) {
-      return res.status(400).json({ error: "Missing authorization code" });
-    }
+  if (!code) {
+    return res.status(400).json({ error: "Missing authorization code" });
+  }
 
-    linkedInAccessToken = code as string;
-    linkedInOauthState = null;
+  linkedInAccessToken = code as string;
+  linkedInOauthState = null;
 
-    return res.json({ status: "LinkedIn auth flow completed (MVP placeholder)" });
-  });
+  return res.json({ status: "LinkedIn auth flow completed (MVP placeholder)" });
+});
 
 app.post("/", async (req, res) => {
   try {

@@ -2,20 +2,53 @@
 <html>
 <head>
   <title>HoboAI Admin</title>
-  <style>body{font-family:sans-serif;padding:24px} table{border-collapse:collapse} td,th{border:1px solid #ddd;padding:8px}</style>
+  <style>
+    body { font-family: sans-serif; padding: 24px; }
+    table { border-collapse: collapse; margin-bottom: 24px; }
+    td, th { border: 1px solid #ddd; padding: 8px; }
+    input, button { padding: 8px; margin: 4px; }
+  </style>
 </head>
 <body>
   <h1>HoboAI Admin</h1>
-  <p>Manage monthly responsibility lists (MVP scaffold).</p>
-  <h2>LinkedIn Responsibilities</h2>
-  <table>
-    <tr><th>Month</th><th>Responsible</th></tr>
-    <tr><td>2026-01</td><td>Markus</td></tr>
-  </table>
-  <h2>Activity Responsibilities</h2>
-  <table>
-    <tr><th>Month</th><th>Responsible</th></tr>
-    <tr><td>2026-01</td><td>Andreas</td></tr>
-  </table>
+  <p>Manage monthly responsibility lists.</p>
+
+  <h2>LinkedIn Assignment</h2>
+  <input id="linkedinMonth" placeholder="2026-06" />
+  <input id="linkedinName" placeholder="Markus" />
+  <button onclick="saveLinkedIn()">Save</button>
+
+  <h2>Activity Assignment</h2>
+  <input id="activityMonth" placeholder="2026-06" />
+  <input id="activityName" placeholder="Andreas" />
+  <input id="activityDate" placeholder="2026-06-15" />
+  <button onclick="saveActivity()">Save</button>
+
+  <script>
+    async function saveLinkedIn() {
+      await fetch('/api/linkedin-assignment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          month: linkedinMonth.value,
+          displayName: linkedinName.value
+        })
+      });
+      alert('Saved');
+    }
+
+    async function saveActivity() {
+      await fetch('/api/activity-assignment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          month: activityMonth.value,
+          displayName: activityName.value,
+          activityDate: activityDate.value
+        })
+      });
+      alert('Saved');
+    }
+  </script>
 </body>
 </html>
