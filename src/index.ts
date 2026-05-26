@@ -9,23 +9,51 @@ app.use(express.json());
 const db = new Firestore();
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const model = process.env.OPENAI_MODEL || "gpt-4o-mini";
+
 const threadMemory = new Map<string, string[]>();
+
 let linkedInAccessToken: string | null = null;
 let linkedInOauthState: string | null = null;
 
+function extractChatText(body: any) {
+  const argumentText = body?.message?.argumentText?.trim();
+
+  if (argumentText) {
+    return argumentText;
+  }
+
+  const text = body?.message?.text?.trim() || "";
+
+  return text
+    .replace(/<users\/[\w-]+>/g, "")
+    .replace(/^@?[^\s]+\s*/i, "")
+    .trim();
+}
+
 async function getAssignments(collection: string) {
   const snapshot = await db.collection(collection).get();
-  return Object.fromEntries(snapshot.docs.map((doc) => [doc.id, doc.data()]));
+
+  return Object.fromEntries(
+    snapshot.docs.map((doc) => [doc.id, doc.data()])
+  );
 }
 
 async function getCurrentAssignment(collection: string) {
   const month = new Date().toISOString().slice(0, 7);
+
   const doc = await db.collection(collection).doc(month).get();
+
   return doc.exists ? doc.data() : null;
 }
 
-async function saveAssignment(collection: string, month: string, payload: Record<string, unknown>) {
-  await db.collection(collection).doc(month).set(payload, { merge: true });
+async function saveAssignment(
+  collection: string,
+  month: string,
+  payload: Record<string, unknown>
+) {
+  await db.collection(collection).doc(month).set(payload, {
+    merge: true
+  });
 }
 
 app.get("/", (_req, res) => {
@@ -34,7 +62,13 @@ app.get("/", (_req, res) => {
 
 app.get("/help", (_req, res) => {
   res.json({
-    commands: ["/help", "/linkedinlist", "/linkedinnow", "/activitylist", "/activitynow"]
+    commands: [
+      "/help",
+      "/linkedinlist",
+      "/linkedinnow",
+      "/activitylist",
+      "/activitynow"
+    ]
   });
 });
 
@@ -44,13 +78,24 @@ app.get("/admin", (_req, res) => {
 
 app.post("/api/linkedin-assignment", async (req, res) => {
   const { month, displayName, chatUserId } = req.body;
-  await saveAssignment("linkedin_assignments", month, { displayName, chatUserId });
+
+  await saveAssignment("linkedin_assignments", month, {
+    displayName,
+    chatUserId
+  });
+
   res.json({ saved: true });
 });
 
 app.post("/api/activity-assignment", async (req, res) => {
   const { month, displayName, activityDate, chatUserId } = req.body;
-  await saveAssignment("activity_assignments", month, { displayName, activityDate, chatUserId });
+
+  await saveAssignment("activity_assignments", month, {
+    displayName,
+    activityDate,
+    chatUserId
+  });
+
   res.json({ saved: true });
 });
 
@@ -72,7 +117,10 @@ app.get("/activitynow", async (_req, res) => {
 
 app.post("/scheduler/linkedin", async (_req, res) => {
   const current = await getCurrentAssignment("linkedin_assignments");
-  const mention = current?.chatUserId ? `<users/${current.chatUserId}>` : current?.displayName || "someone";
+
+  const mention = current?.chatUserId
+    ? `<users/${current.chatUserId}>`
+    : current?.displayName || "someone";
 
   res.json({
     message: `Hey ${mention} is now responsible for the LinkedIn posts.`
@@ -81,10 +129,15 @@ app.post("/scheduler/linkedin", async (_req, res) => {
 
 app.post("/scheduler/activity", async (_req, res) => {
   const current = await getCurrentAssignment("activity_assignments");
-  const mention = current?.chatUserId ? `<users/${current.chatUserId}>` : current?.displayName || "someone";
+
+  const mention = current?.chatUserId
+    ? `<users/${current.chatUserId}>`
+    : current?.displayName || "someone";
 
   res.json({
-    message: `Hey the monthly activity is at ${current?.activityDate || "TBD"}, and responsible is ${mention}.`,
+    message: `Hey the monthly activity is at ${
+      current?.activityDate || "TBD"
+    }, and responsible is ${mention}.`,
     dmMessage: current?.displayName
       ? `Hi ${current.displayName}, you're responsible this month.`
       : null
@@ -96,7 +149,9 @@ app.get("/linkedin/auth", (_req, res) => {
   const redirectUri = process.env.LINKEDIN_REDIRECT_URI;
 
   if (!clientId || !redirectUri) {
-    return res.status(500).json({ error: "Missing LinkedIn OAuth configuration" });
+    return res
+      .status(500)
+      .json({ error: "Missing LinkedIn OAuth configuration" });
   }
 
   linkedInOauthState = Math.random().toString(36).slice(2);
@@ -109,48 +164,114 @@ app.get("/linkedin/auth", (_req, res) => {
     scope: "w_organization_social"
   });
 
-  return res.redirect(`https://www.linkedin.com/oauth/v2/authorization?${params.toString()}`);
+  return res.redirect(
+    `https://www.linkedin.com/oauth/v2/authorization?${params.toString()}`
+  );
 });
 
 app.get("/linkedin/callback", (req, res) => {
   const { code, state, error, error_description } = req.query;
 
-  console.log(JSON.stringify({
-    type: "linkedin_callback",
-    hasCode: Boolean(code),
-    hasState: Boolean(state),
-    error,
-    errorDescription: error_description
-  }));
+  console.log(
+    JSON.stringify({
+      type: "linkedin_callback",
+      hasCode: Boolean(code),
+      hasState: Boolean(state),
+      error,
+      errorDescription: error_description
+    })
+  );
 
   if (error) {
-    return res.status(400).json({ error, errorDescription: error_description });
+    return res
+      .status(400)
+      .json({ error, errorDescription: error_description });
   }
 
   if (!state || state !== linkedInOauthState) {
-    return res.status(400).json({ error: "Invalid OAuth state" });
+    return res.status(400).json({
+      error: "Invalid OAuth state"
+    });
   }
 
   if (!code) {
-    return res.status(400).json({ error: "Missing authorization code" });
+    return res.status(400).json({
+      error: "Missing authorization code"
+    });
   }
 
   linkedInAccessToken = code as string;
   linkedInOauthState = null;
 
-  return res.json({ status: "LinkedIn auth flow completed (MVP placeholder)" });
+  return res.json({
+    status: "LinkedIn auth flow completed (MVP placeholder)"
+  });
 });
 
 app.post("/", async (req, res) => {
   try {
-    const text = req.body?.message?.argumentText || req.body?.message?.text || "";
+    const text = extractChatText(req.body);
 
-    if (text === "/help") {
-      return res.json({ text: "Commands: /help, /linkedinlist, /linkedinnow, /activitylist, /activitynow" });
+    console.log(
+      JSON.stringify({
+        type: "google_chat_event",
+        eventType: req.body?.type,
+        hasArgumentText: Boolean(req.body?.message?.argumentText),
+        hasText: Boolean(req.body?.message?.text),
+        parsedText: text
+      })
+    );
+
+    if (!text) {
+      return res.json({
+        text: "Hi — mention me with a message or type /help."
+      });
     }
 
-    const thread = req.body?.message?.thread?.name || "default";
+    if (text === "/help" || text.toLowerCase() === "help") {
+      return res.json({
+        text:
+          "Commands: /help, /linkedinlist, /linkedinnow, /activitylist, /activitynow"
+      });
+    }
+
+    if (text === "/linkedinlist") {
+      return res.json({
+        text: JSON.stringify(
+          await getAssignments("linkedin_assignments")
+        )
+      });
+    }
+
+    if (text === "/activitylist") {
+      return res.json({
+        text: JSON.stringify(
+          await getAssignments("activity_assignments")
+        )
+      });
+    }
+
+    if (text === "/linkedinnow") {
+      return res.json({
+        text: JSON.stringify(
+          await getCurrentAssignment("linkedin_assignments")
+        )
+      });
+    }
+
+    if (text === "/activitynow") {
+      return res.json({
+        text: JSON.stringify(
+          await getCurrentAssignment("activity_assignments")
+        )
+      });
+    }
+
+    const thread =
+      req.body?.message?.thread?.name || "default";
+
     const history = threadMemory.get(thread) || [];
+
     history.push(`user: ${text}`);
 
     const response = await openai.responses.create({
@@ -158,24 +279,33 @@ app.post("/", async (req, res) => {
       input: history.join("\n")
     });
 
-    const reply = response.output_text || "No response.";
+    const reply =
+      (response.output_text || "No response.").trim() ||
+      "I understood that, but I had nothing to say.";
+
     history.push(`assistant: ${reply}`);
+
     threadMemory.set(thread, history.slice(-10));
 
-    return res.json({ text: reply });
+    return res.json({
+      text: reply
+    });
   } catch (error: any) {
     const isQuota = error?.status === 429;
 
-    console.log(JSON.stringify({
-      type: "openai_error",
-      status: isQuota ? "quota_exceeded" : "error",
-      httpStatus: error?.status || 500
-    }));
+    console.log(
+      JSON.stringify({
+        type: "openai_error",
+        status: isQuota ? "quota_exceeded" : "error",
+        httpStatus: error?.status || 500,
+        message: error?.message
+      })
+    );
 
     return res.json({
       text: isQuota
         ? "AI service quota exceeded. Please check billing."
-        : "AI service temporarily unavailable."
+        : "I hit an error while responding."
     });
   }
 });
