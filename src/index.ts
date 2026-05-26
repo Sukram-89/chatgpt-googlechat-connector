@@ -18,10 +18,7 @@ function extractChatText(body: any) {
   if (argumentText) return argumentText;
 
   const text = body?.message?.text?.trim() || "";
-  return text
-    .replace(/<users\/[\w-]+>/g, "")
-    .replace(/^@[^\s]+\s*/i, "")
-    .trim();
+  return text.replace(/<users\/[\w-]+>/g, "").replace(/^@[^\s]+\s*/i, "").trim();
 }
 
 async function getAssignments(collection: string) {
@@ -35,34 +32,75 @@ async function getCurrentAssignment(collection: string) {
   return doc.exists ? doc.data() : null;
 }
 
-app.get("/", (_req, res) => {
-  res.json({ status: "ok" });
+async function saveAssignment(collection: string, month: string, payload: Record<string, unknown>) {
+  await db.collection(collection).doc(month).set(payload, { merge: true });
+}
+
+app.get("/", (_req, res) => res.json({ status: "ok" }));
+app.get("/help", (_req, res) => res.json({ commands: ["/help", "/linkedinlist", "/linkedinnow", "/activitylist", "/activitynow"] }));
+app.get("/admin", (_req, res) => res.sendFile(path.join(process.cwd(), "src", "admin.html")));
+
+app.post("/api/linkedin-assignment", async (req, res) => {
+  const { month, displayName, chatUserId } = req.body;
+  await saveAssignment("linkedin_assignments", month, { displayName, chatUserId });
+  res.json({ saved: true });
 });
 
-app.get("/help", (_req, res) => {
+app.post("/api/activity-assignment", async (req, res) => {
+  const { month, displayName, activityDate, chatUserId } = req.body;
+  await saveAssignment("activity_assignments", month, { displayName, activityDate, chatUserId });
+  res.json({ saved: true });
+});
+
+app.get("/api/linkedinlist", async (_req, res) => res.json(await getAssignments("linkedin_assignments")));
+app.get("/api/activitylist", async (_req, res) => res.json(await getAssignments("activity_assignments")));
+app.get("/linkedinnow", async (_req, res) => res.json(await getCurrentAssignment("linkedin_assignments")));
+app.get("/activitynow", async (_req, res) => res.json(await getCurrentAssignment("activity_assignments")));
+
+app.post("/scheduler/linkedin", async (_req, res) => {
+  const current = await getCurrentAssignment("linkedin_assignments");
+  const mention = current?.chatUserId ? `<users/${current.chatUserId}>` : current?.displayName || "someone";
+  res.json({ message: `Hey ${mention} is now responsible for the LinkedIn posts.` });
+});
+
+app.post("/scheduler/activity", async (_req, res) => {
+  const current = await getCurrentAssignment("activity_assignments");
+  const mention = current?.chatUserId ? `<users/${current.chatUserId}>` : current?.displayName || "someone";
   res.json({
-    commands: ["/help", "/linkedinlist", "/linkedinnow", "/activitylist", "/activitynow"]
+    message: `Hey the monthly activity is at ${current?.activityDate || "TBD"}, and responsible is ${mention}.`,
+    dmMessage: current?.displayName ? `Hi ${current.displayName}, you're responsible this month.` : null
   });
 });
 
-app.get("/admin", (_req, res) => {
-  res.sendFile(path.join(process.cwd(), "src", "admin.html"));
+app.get("/linkedin/auth", (_req, res) => {
+  const clientId = process.env.LINKEDIN_CLIENT_ID;
+  const redirectUri = process.env.LINKEDIN_REDIRECT_URI;
+  if (!clientId || !redirectUri) return res.status(500).json({ error: "Missing LinkedIn OAuth configuration" });
+
+  linkedInOauthState = Math.random().toString(36).slice(2);
+  const params = new URLSearchParams({
+    response_type: "code",
+    client_id: clientId,
+    redirect_uri: redirectUri,
+    state: linkedInOauthState,
+    scope: "w_organization_social"
+  });
+
+  return res.redirect(`https://www.linkedin.com/oauth/v2/authorization?${params.toString()}`);
 });
 
-app.get("/api/linkedinlist", async (_req, res) => {
-  res.json(await getAssignments("linkedin_assignments"));
-});
+app.get("/linkedin/callback", (req, res) => {
+  const { code, state, error, error_description } = req.query;
 
-app.get("/api/activitylist", async (_req, res) => {
-  res.json(await getAssignments("activity_assignments"));
-});
+  console.log(JSON.stringify({ type: "linkedin_callback", hasCode: Boolean(code), hasState: Boolean(state), error, errorDescription: error_description }));
 
-app.get("/linkedinnow", async (_req, res) => {
-  res.json(await getCurrentAssignment("linkedin_assignments"));
-});
+  if (error) return res.status(400).json({ error, errorDescription: error_description });
+  if (!state || state !== linkedInOauthState) return res.status(400).json({ error: "Invalid OAuth state" });
+  if (!code) return res.status(400).json({ error: "Missing authorization code" });
 
-app.get("/activitynow", async (_req, res) => {
-  res.json(await getCurrentAssignment("activity_assignments"));
+  linkedInAccessToken = code as string;
+  linkedInOauthState = null;
+  return res.json({ status: "LinkedIn auth flow completed (MVP placeholder)" });
 });
 
 app.post("/", async (req, res) => {
@@ -77,41 +115,22 @@ app.post("/", async (req, res) => {
       parsedText: text
     }));
 
-    if (!text) {
-      return res.json({ text: "Hi — mention me with a message or type /help." });
-    }
+    if (!text) return res.json({ text: "Hi — mention me with a message or type /help." });
 
     if (text === "/help" || text.toLowerCase() === "help") {
-      return res.json({
-        text: "Commands: /help, /linkedinlist, /linkedinnow, /activitylist, /activitynow"
-      });
+      return res.json({ text: "Commands: /help, /linkedinlist, /linkedinnow, /activitylist, /activitynow" });
     }
 
-    if (text === "/linkedinlist") {
-      return res.json({ text: JSON.stringify(await getAssignments("linkedin_assignments")) });
-    }
-
-    if (text === "/activitylist") {
-      return res.json({ text: JSON.stringify(await getAssignments("activity_assignments")) });
-    }
-
-    if (text === "/linkedinnow") {
-      return res.json({ text: JSON.stringify(await getCurrentAssignment("linkedin_assignments")) });
-    }
-
-    if (text === "/activitynow") {
-      return res.json({ text: JSON.stringify(await getCurrentAssignment("activity_assignments")) });
-    }
+    if (text === "/linkedinlist") return res.json({ text: JSON.stringify(await getAssignments("linkedin_assignments")) });
+    if (text === "/activitylist") return res.json({ text: JSON.stringify(await getAssignments("activity_assignments")) });
+    if (text === "/linkedinnow") return res.json({ text: JSON.stringify(await getCurrentAssignment("linkedin_assignments")) });
+    if (text === "/activitynow") return res.json({ text: JSON.stringify(await getCurrentAssignment("activity_assignments")) });
 
     const thread = req.body?.message?.thread?.name || "default";
     const history = threadMemory.get(thread) || [];
     history.push(`user: ${text}`);
 
-    const response = await openai.responses.create({
-      model,
-      input: history.join("\n")
-    });
-
+    const response = await openai.responses.create({ model, input: history.join("\n") });
     const reply = (response.output_text || "No response.").trim() || "I understood that, but I had nothing to say.";
 
     history.push(`assistant: ${reply}`);
@@ -128,11 +147,7 @@ app.post("/", async (req, res) => {
       message: error?.message
     }));
 
-    return res.json({
-      text: isQuota
-        ? "AI service quota exceeded. Please check billing."
-        : "I hit an error while responding."
-    });
+    return res.json({ text: isQuota ? "AI service quota exceeded. Please check billing." : "I hit an error while responding." });
   }
 });
 
