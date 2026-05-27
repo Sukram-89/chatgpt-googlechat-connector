@@ -15,14 +15,20 @@ const threadMemory = new Map<string, string[]>();
 let linkedInAccessToken: string | null = null;
 let linkedInOauthState: string | null = null;
 
+function getChatMessage(body: any) {
+  return body?.chat?.messagePayload?.message || body?.message;
+}
+
 function extractChatText(body: any) {
-  const argumentText = body?.message?.argumentText?.trim();
+  const message = getChatMessage(body);
+
+  const argumentText = message?.argumentText?.trim();
 
   if (argumentText) {
     return argumentText;
   }
 
-  const text = body?.message?.text?.trim() || "";
+  const text = message?.text?.trim() || "";
 
   return text
     .replace(/<users\/[\w-]+>/g, "")
@@ -213,14 +219,15 @@ app.post("/", async (req, res) => {
     console.log("FULL_GOOGLE_CHAT_PAYLOAD");
     console.log(JSON.stringify(req.body, null, 2));
 
+    const message = getChatMessage(req.body);
     const text = extractChatText(req.body);
 
     console.log(
       JSON.stringify({
         type: "google_chat_event",
         eventType: req.body?.type,
-        hasArgumentText: Boolean(req.body?.message?.argumentText),
-        hasText: Boolean(req.body?.message?.text),
+        hasArgumentText: Boolean(message?.argumentText),
+        hasText: Boolean(message?.text),
         parsedText: text
       })
     );
@@ -271,7 +278,7 @@ app.post("/", async (req, res) => {
     }
 
     const thread =
-      req.body?.message?.thread?.name || "default";
+      message?.thread?.name || "default";
 
     const history = threadMemory.get(thread) || [];
 
