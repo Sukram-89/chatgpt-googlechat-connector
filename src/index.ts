@@ -26,7 +26,7 @@ function extractChatText(body: any) {
 
   return text
     .replace(/<users\/[\w-]+>/g, "")
-    .replace(/^@?[^\s]+\s*/i, "")
+    .replace(/^@[^\s]+\s*/i, "")
     .trim();
 }
 
@@ -210,6 +210,9 @@ app.get("/linkedin/callback", (req, res) => {
 
 app.post("/", async (req, res) => {
   try {
+    console.log("FULL_GOOGLE_CHAT_PAYLOAD");
+    console.log(JSON.stringify(req.body, null, 2));
+
     const text = extractChatText(req.body);
 
     console.log(
