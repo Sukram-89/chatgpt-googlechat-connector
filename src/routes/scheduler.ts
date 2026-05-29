@@ -114,6 +114,7 @@ function formatDaysOff(
   daysOff: Array<{
     date: string;
     name: string;
+    displayName: string;
   }>
 ) {
   if (!daysOff.length) {
@@ -121,7 +122,7 @@ function formatDaysOff(
   }
 
   return `Days off this month: ${daysOff
-    .map((dayOff) => `${dayOff.date} (${dayOff.name})`)
+    .map((dayOff) => `${dayOff.date} (${dayOff.displayName})`)
     .join(", ")}.`;
 }
 

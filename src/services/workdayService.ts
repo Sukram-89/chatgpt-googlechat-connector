@@ -14,6 +14,13 @@ interface ArbetsdagResponse {
 export interface DayOff {
   date: string;
   name: string;
+  displayName: string;
+}
+
+function cleanHolidayName(value: string) {
+  return value
+    .replace(/^[A-Za-zÅÄÖåäö]{2,4}\s+\d{4}-\d{2}-\d{2}:\s*/, "")
+    .trim();
 }
 
 function getStockholmDateParts(date: Date) {
@@ -83,7 +90,8 @@ async function getWorkdayRange(from: string, to: string) {
     daysOff: (result.helgdagar || [])
       .map((holiday) => ({
         date: holiday.datum || "",
-        name: holiday.helgdag || "Day off"
+        name: holiday.helgdag || "Day off",
+        displayName: cleanHolidayName(holiday.helgdag || "Day off")
       }))
       .filter((dayOff): dayOff is DayOff => Boolean(dayOff.date))
   };
