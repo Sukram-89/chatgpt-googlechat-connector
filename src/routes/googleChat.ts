@@ -4,6 +4,7 @@ import {
   createChatResponse,
   extractChatText,
   getChatMessage,
+  getChatUser,
   getSlashCommandId
 } from "../googleChat";
 import { createChatReply } from "../services/openaiChat";
@@ -12,6 +13,28 @@ import {
   formatRotationNow
 } from "../services/rotationMessages";
 import { getRotation, ROTATION_IDS } from "../services/rotationService";
+import { saveUser, slugifyUserId } from "../services/userService";
+
+async function captureChatUser(body: any) {
+  const user = getChatUser(body);
+  const email = typeof user?.email === "string" ? user.email.trim() : "";
+  const chatUserId = typeof user?.name === "string" ? user.name.trim() : "";
+  const displayName =
+    typeof user?.displayName === "string" ? user.displayName.trim() : "";
+
+  if (!email || !chatUserId) {
+    return null;
+  }
+
+  const savedUser = await saveUser({
+    id: slugifyUserId(email),
+    displayName: displayName || email,
+    email,
+    chatUserId
+  });
+
+  return savedUser;
+}
 
 async function getCommandResponse(commandIdOrText: string) {
   const command = commandIdOrText.replace(/^\//, "").toLowerCase();
@@ -79,6 +102,7 @@ export function createGoogleChatRouter() {
       const message = getChatMessage(req.body);
       const text = extractChatText(req.body);
       const slashCommandId = getSlashCommandId(req.body);
+      const capturedUser = await captureChatUser(req.body);
 
       console.log(
         JSON.stringify({
@@ -87,7 +111,8 @@ export function createGoogleChatRouter() {
           slashCommandId,
           hasArgumentText: Boolean(message?.argumentText),
           hasText: Boolean(message?.text),
-          parsedText: text
+          parsedText: text,
+          capturedUserId: capturedUser?.id || null
         })
       );
 

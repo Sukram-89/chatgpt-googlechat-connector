@@ -2,6 +2,16 @@ export function getChatMessage(body: any) {
   return body?.chat?.messagePayload?.message || body?.message;
 }
 
+export function getChatUser(body: any) {
+  return (
+    body?.user ||
+    body?.chat?.user ||
+    body?.chat?.messagePayload?.message?.sender ||
+    body?.message?.sender ||
+    null
+  );
+}
+
 export function getSlashCommandId(body: any) {
   return (
     body?.appCommandMetadata?.appCommandId ||

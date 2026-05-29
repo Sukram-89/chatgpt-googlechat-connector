@@ -9,7 +9,7 @@ export interface ManagedUser {
   email: string;
 }
 
-function slugify(value: string) {
+export function slugifyUserId(value: string) {
   return value
     .trim()
     .toLowerCase()
@@ -26,7 +26,7 @@ export function sanitizeUser(body: unknown): ManagedUser {
     typeof data.chatUserId === "string" ? data.chatUserId.trim() : "";
   const email = typeof data.email === "string" ? data.email.trim() : "";
   const requestedId = typeof data.id === "string" ? data.id.trim() : "";
-  const id = requestedId || slugify(email);
+  const id = requestedId || slugifyUserId(email);
 
   if (!id || !displayName || !email) {
     throw new Error("User requires displayName and email");
