@@ -18,6 +18,8 @@ npm run dev
 - OPENAI_API_KEY
 - OPENAI_MODEL
 - ADMIN_URL
+- GOOGLE_CHAT_WEBHOOK_URL
+- GOOGLE_CHAT_DM_WEBHOOKS
 
 ## Deploy to Cloud Run
 Use Cloud Run to deploy this app and configure the Google Chat app webhook to the HTTPS endpoint.
@@ -33,3 +35,47 @@ Configure the Google Chat app with these command IDs and names. The same list is
 | 4 | `/activitynow` |
 | 5 | `/activitylist` |
 | 6 | `/admin` |
+
+## Monthly notifications
+Configure a Google Chat incoming webhook URL in `GOOGLE_CHAT_WEBHOOK_URL`.
+
+Test backend-to-webhook posting with:
+
+```sh
+POST /scheduler/test-message
+```
+
+Trigger monthly notifications from Cloud Scheduler with:
+
+```sh
+POST /scheduler/monthly
+```
+
+You can also trigger the notifications individually:
+
+```sh
+POST /scheduler/linkedin
+POST /scheduler/activity
+```
+
+Activity DM reminders are sent 45 days before the configured activity date. Run this endpoint daily from Cloud Scheduler; it only sends when the activity is exactly 45 days away:
+
+```sh
+POST /scheduler/activity-reminder
+```
+
+For testing, bypass the date check with:
+
+```sh
+POST /scheduler/activity-reminder?force=true
+```
+
+Provide per-user DM webhook URLs as JSON in `GOOGLE_CHAT_DM_WEBHOOKS`, keyed by `chatUserId`:
+
+```json
+{
+  "users/123": "https://chat.googleapis.com/v1/spaces/..."
+}
+```
+
+Incoming webhooks post to the space they were created for. For real 1:1 direct messages, replace the per-user webhook map with Google Chat API authentication and direct-message space creation.

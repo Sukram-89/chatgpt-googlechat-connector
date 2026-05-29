@@ -87,7 +87,8 @@
         font-size: 14px;
       }
 
-      input {
+      input,
+      select {
         box-sizing: border-box;
         width: 100%;
         min-height: 38px;
@@ -95,6 +96,14 @@
         border-radius: 6px;
         padding: 8px 10px;
         font: inherit;
+      }
+
+      .wide-section {
+        margin-bottom: 20px;
+      }
+
+      .user-row {
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) auto;
       }
 
       table {
@@ -172,6 +181,7 @@
         }
 
         .section-head,
+        .user-row,
         .form-row,
         .date-row {
           grid-template-columns: 1fr;
@@ -190,6 +200,34 @@
         <p>Manage LinkedIn and activity rotations.</p>
       </header>
 
+      <section class="wide-section">
+        <div class="section-head">
+          <div>
+            <h2>Users</h2>
+            <p class="status" id="usersStatus">Loading...</p>
+          </div>
+        </div>
+
+        <div class="form-row user-row">
+          <input id="userName" placeholder="Display name">
+          <input id="userEmail" placeholder="Email">
+          <input id="userChatId" placeholder="Chat user id">
+          <button class="secondary" onclick="saveUser()">Add user</button>
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Email</th>
+              <th>Chat ID</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="usersTable"></tbody>
+        </table>
+      </section>
+
       <div class="grid">
         <section>
           <div class="section-head">
@@ -201,8 +239,7 @@
           </div>
 
           <div class="form-row">
-            <input id="linkedinName" placeholder="Display name">
-            <input id="linkedinChatId" placeholder="Chat user id">
+            <select id="linkedinUser"></select>
             <button class="secondary" onclick="addMember('linkedin')">Add</button>
           </div>
 
@@ -210,7 +247,7 @@
             <thead>
               <tr>
                 <th>Name</th>
-                <th>Chat ID</th>
+                <th>Email</th>
                 <th></th>
               </tr>
             </thead>
@@ -233,8 +270,7 @@
           </div>
 
           <div class="form-row">
-            <input id="activityName" placeholder="Display name">
-            <input id="activityChatId" placeholder="Chat user id">
+            <select id="activityUser"></select>
             <button class="secondary" onclick="addMember('activity')">Add</button>
           </div>
 
@@ -242,7 +278,7 @@
             <thead>
               <tr>
                 <th>Name</th>
-                <th>Chat ID</th>
+                <th>Email</th>
                 <th></th>
               </tr>
             </thead>
@@ -254,6 +290,7 @@
 
     <script>
       const state = {
+        users: [],
         linkedin: { members: [], current: null, next: null },
         activity: { members: [], current: null, next: null, activityDate: "" }
       };
@@ -269,6 +306,70 @@
 
       function setStatus(type, text) {
         document.getElementById(`${type}Status`).innerText = text;
+      }
+
+      function getUser(userId) {
+        return state.users.find((user) => user.id === userId);
+      }
+
+      function getMemberLabel(member) {
+        const user = member.userId ? getUser(member.userId) : null;
+        return user?.displayName || member.displayName || "Unknown user";
+      }
+
+      function getMemberEmail(member) {
+        const user = member.userId ? getUser(member.userId) : null;
+        return user?.email || member.email || "";
+      }
+
+      function syncMemberFromUser(member) {
+        const user = member.userId ? getUser(member.userId) : null;
+
+        if (!user) {
+          return member;
+        }
+
+        return {
+          userId: user.id,
+          displayName: user.displayName,
+          ...(user.chatUserId ? { chatUserId: user.chatUserId } : {}),
+          ...(user.email ? { email: user.email } : {})
+        };
+      }
+
+      function renderUserSelects() {
+        const options = [
+          '<option value="">Select user</option>',
+          ...state.users.map(
+            (user) =>
+              `<option value="${escapeHtml(user.id)}">${escapeHtml(user.displayName)}</option>`
+          )
+        ].join("");
+
+        document.getElementById("linkedinUser").innerHTML = options;
+        document.getElementById("activityUser").innerHTML = options;
+      }
+
+      function renderUsers() {
+        document.getElementById("usersStatus").innerText = `${state.users.length} users`;
+        renderUserSelects();
+
+        document.getElementById("usersTable").innerHTML = state.users
+          .map(
+            (user) => `
+              <tr>
+                <td>${escapeHtml(user.displayName)}</td>
+                <td>${escapeHtml(user.email || "")}</td>
+                <td>${escapeHtml(user.chatUserId || "")}</td>
+                <td>
+                  <button class="danger" onclick="deleteUser('${escapeHtml(user.id)}')">
+                    Remove
+                  </button>
+                </td>
+              </tr>
+            `
+          )
+          .join("");
       }
 
       function recomputeRotation(type) {
@@ -291,8 +392,8 @@
         recomputeRotation(type);
 
         const rotation = state[type];
-        const current = rotation.current?.displayName || "n/a";
-        const next = rotation.next?.displayName || "n/a";
+        const current = rotation.current ? getMemberLabel(rotation.current) : "n/a";
+        const next = rotation.next ? getMemberLabel(rotation.next) : "n/a";
         const date =
           type === "activity" ? ` | Date: ${rotation.activityDate || "TBD"}` : "";
 
@@ -303,7 +404,7 @@
             (member, index) => `
               <tr>
                 <td>${escapeHtml(member.displayName)}</td>
-                <td>${escapeHtml(member.chatUserId || "")}</td>
+                <td>${escapeHtml(getMemberEmail(member))}</td>
                 <td>
                   <button class="danger" onclick="removeMember('${type}', ${index})">
                     Remove
@@ -315,6 +416,17 @@
           .join("");
       }
 
+      async function loadUsers() {
+        const response = await fetch("/api/users");
+
+        if (!response.ok) {
+          throw new Error("Could not load users");
+        }
+
+        state.users = await response.json();
+        renderUsers();
+      }
+
       async function loadRotation(type) {
         const response = await fetch(`/api/${type}-rotation`);
 
@@ -324,7 +436,7 @@
 
         const rotation = await response.json();
         state[type] = {
-          members: rotation.members || [],
+          members: (rotation.members || []).map(syncMemberFromUser),
           current: rotation.current || null,
           next: rotation.next || null,
           activityDate: rotation.activityDate || ""
@@ -339,23 +451,17 @@
       }
 
       function addMember(type) {
-        const nameInput = document.getElementById(`${type}Name`);
-        const chatIdInput = document.getElementById(`${type}ChatId`);
-        const displayName = nameInput.value.trim();
-        const chatUserId = chatIdInput.value.trim();
+        const userSelect = document.getElementById(`${type}User`);
+        const user = getUser(userSelect.value);
 
-        if (!displayName) {
-          nameInput.focus();
+        if (!user) {
+          userSelect.focus();
           return;
         }
 
-        state[type].members.push({
-          displayName,
-          ...(chatUserId ? { chatUserId } : {})
-        });
+        state[type].members.push(syncMemberFromUser({ userId: user.id }));
 
-        nameInput.value = "";
-        chatIdInput.value = "";
+        userSelect.value = "";
         renderRotation(type);
       }
 
@@ -366,7 +472,7 @@
 
       async function saveRotation(type) {
         const payload = {
-          members: state[type].members
+          members: state[type].members.map(syncMemberFromUser)
         };
 
         if (type === "activity") {
@@ -388,7 +494,7 @@
 
         const rotation = await response.json();
         state[type] = {
-          members: rotation.members || [],
+          members: (rotation.members || []).map(syncMemberFromUser),
           current: rotation.current || null,
           next: rotation.next || null,
           activityDate: rotation.activityDate || ""
@@ -397,12 +503,78 @@
         renderRotation(type);
       }
 
-      loadRotation("linkedin").catch(() =>
-        setStatus("linkedin", "Could not load LinkedIn rotation.")
-      );
-      loadRotation("activity").catch(() =>
-        setStatus("activity", "Could not load activity rotation.")
-      );
+      async function saveUser() {
+        const displayNameInput = document.getElementById("userName");
+        const payload = {
+          displayName: displayNameInput.value.trim(),
+          email: document.getElementById("userEmail").value.trim(),
+          chatUserId: document.getElementById("userChatId").value.trim()
+        };
+
+        if (!payload.displayName) {
+          displayNameInput.focus();
+          return;
+        }
+
+        document.getElementById("usersStatus").innerText = "Saving...";
+
+        const response = await fetch("/api/users", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+          document.getElementById("usersStatus").innerText = "Save failed.";
+          return;
+        }
+
+        document.getElementById("userName").value = "";
+        document.getElementById("userEmail").value = "";
+        document.getElementById("userChatId").value = "";
+        await loadUsers();
+        renderRotation("linkedin");
+        renderRotation("activity");
+      }
+
+      async function deleteUser(userId) {
+        document.getElementById("usersStatus").innerText = "Deleting...";
+
+        const response = await fetch(`/api/users/${encodeURIComponent(userId)}`, {
+          method: "DELETE"
+        });
+
+        if (!response.ok) {
+          document.getElementById("usersStatus").innerText = "Delete failed.";
+          return;
+        }
+
+        state.linkedin.members = state.linkedin.members.filter(
+          (member) => member.userId !== userId
+        );
+        state.activity.members = state.activity.members.filter(
+          (member) => member.userId !== userId
+        );
+
+        await loadUsers();
+        renderRotation("linkedin");
+        renderRotation("activity");
+      }
+
+      loadUsers()
+        .then(() =>
+          Promise.all([
+            loadRotation("linkedin").catch(() =>
+              setStatus("linkedin", "Could not load LinkedIn rotation.")
+            ),
+            loadRotation("activity").catch(() =>
+              setStatus("activity", "Could not load activity rotation.")
+            )
+          ])
+        )
+        .catch(() => {
+          document.getElementById("usersStatus").innerText = "Could not load users.";
+        });
 
       document.getElementById("activityDate").addEventListener("change", (event) => {
         state.activity.activityDate = event.target.value;

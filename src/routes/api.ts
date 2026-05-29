@@ -9,6 +9,12 @@ import {
   sanitizeRotationConfig,
   saveRotationConfig
 } from "../services/rotationService";
+import {
+  deleteUser,
+  listUsers,
+  sanitizeUser,
+  saveUser
+} from "../services/userService";
 
 export function createApiRouter() {
   const router = Router();
@@ -47,6 +53,26 @@ export function createApiRouter() {
     const rotation = await saveRotationConfig(ROTATION_IDS.ACTIVITY, config);
 
     res.json({ saved: true, ...rotation });
+  });
+
+  router.get("/users", async (_req, res) => {
+    res.json(await listUsers());
+  });
+
+  router.post("/users", async (req, res) => {
+    try {
+      const user = await saveUser(sanitizeUser(req.body));
+
+      res.json({ saved: true, user });
+    } catch (error: any) {
+      res.status(400).json({ error: error?.message || "Invalid user" });
+    }
+  });
+
+  router.delete("/users/:id", async (req, res) => {
+    await deleteUser(req.params.id);
+
+    res.json({ deleted: true });
   });
 
   router.post("/linkedin-assignment", async (req, res) => {

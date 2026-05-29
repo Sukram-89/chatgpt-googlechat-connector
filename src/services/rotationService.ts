@@ -25,10 +25,12 @@ export function sanitizeMembers(members: unknown): RotationMember[] {
       }
 
       const data = member as Record<string, unknown>;
+      const userId = typeof data.userId === "string" ? data.userId.trim() : "";
       const displayName =
         typeof data.displayName === "string" ? data.displayName.trim() : "";
       const chatUserId =
         typeof data.chatUserId === "string" ? data.chatUserId.trim() : "";
+      const email = typeof data.email === "string" ? data.email.trim() : "";
 
       if (!displayName) {
         return null;
@@ -36,7 +38,9 @@ export function sanitizeMembers(members: unknown): RotationMember[] {
 
       return {
         displayName,
-        ...(chatUserId ? { chatUserId } : {})
+        ...(userId ? { userId } : {}),
+        ...(chatUserId ? { chatUserId } : {}),
+        ...(email ? { email } : {})
       };
     })
     .filter((member): member is RotationMember => Boolean(member));
