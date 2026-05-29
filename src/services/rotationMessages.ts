@@ -39,3 +39,9 @@ export function formatRotationList(label: string, rotation: RotationState) {
     rotation.current
   )}\nNext: ${getMention(rotation.next)}`;
 }
+
+export function formatActivityDetails(rotation: RotationState) {
+  return `Activity: ${rotation.activityName || "TBD"}\nActivity date: ${
+    rotation.activityDate || "TBD"
+  }`;
+}

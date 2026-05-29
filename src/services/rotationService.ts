@@ -51,10 +51,13 @@ export function sanitizeRotationConfig(body: unknown): RotationConfig {
     body && typeof body === "object" ? (body as Record<string, unknown>) : {};
   const activityDate =
     typeof data.activityDate === "string" ? data.activityDate.trim() : "";
+  const activityName =
+    typeof data.activityName === "string" ? data.activityName.trim() : "";
 
   return {
     members: sanitizeMembers(data.members),
-    ...(activityDate ? { activityDate } : {})
+    ...(activityDate ? { activityDate } : {}),
+    ...(activityName ? { activityName } : {})
   };
 }
 
@@ -68,6 +71,9 @@ export async function getRotationConfig(
     members: sanitizeMembers(data?.members),
     ...(typeof data?.activityDate === "string" && data.activityDate.trim()
       ? { activityDate: data.activityDate.trim() }
+      : {}),
+    ...(typeof data?.activityName === "string" && data.activityName.trim()
+      ? { activityName: data.activityName.trim() }
       : {})
   };
 }
@@ -84,6 +90,7 @@ export async function saveRotationConfig(
     {
       members: config.members,
       activityDate: config.activityDate || null,
+      activityName: config.activityName || null,
       updatedAt: new Date().toISOString()
     },
     { merge: true }

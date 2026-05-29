@@ -9,6 +9,7 @@ import {
 } from "../googleChat";
 import { createChatReply } from "../services/openaiChat";
 import {
+  formatActivityDetails,
   formatRotationList,
   formatRotationNow
 } from "../services/rotationMessages";
@@ -63,9 +64,9 @@ async function getCommandResponse(commandIdOrText: string) {
       {
         const rotation = await getRotation(ROTATION_IDS.ACTIVITY);
 
-        return `${formatRotationNow("Activity", rotation)} Activity date: ${
-          rotation.activityDate || "TBD"
-        }.`;
+        return `${formatRotationNow("Activity", rotation)}\n${formatActivityDetails(
+          rotation
+        )}`;
       }
 
     case COMMAND_IDS.ACTIVITY_LIST:
@@ -73,9 +74,9 @@ async function getCommandResponse(commandIdOrText: string) {
       {
         const rotation = await getRotation(ROTATION_IDS.ACTIVITY);
 
-        return `${formatRotationList("Activity", rotation)}\nActivity date: ${
-          rotation.activityDate || "TBD"
-        }`;
+        return `${formatRotationList("Activity", rotation)}\n${formatActivityDetails(
+          rotation
+        )}`;
       }
 
     case COMMAND_IDS.ADMIN:

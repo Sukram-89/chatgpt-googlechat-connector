@@ -20,6 +20,7 @@ npm run dev
 - ADMIN_URL
 - GOOGLE_CHAT_WEBHOOK_URL
 - GOOGLE_CHAT_DM_WEBHOOKS
+- ARBETSDAG_API_KEY
 
 ## Deploy to Cloud Run
 Use Cloud Run to deploy this app and configure the Google Chat app webhook to the HTTPS endpoint.
@@ -70,6 +71,30 @@ For testing, bypass the date check with:
 
 ```sh
 POST /scheduler/activity-reminder?force=true
+```
+
+Hours reminders use `ARBETSDAG_API_KEY` to find the last Swedish workday of the month. Run this endpoint daily from Cloud Scheduler; it skips locally before the 25th and on weekends, then calls Arbetsdag only near month-end on weekdays:
+
+```sh
+POST /scheduler/hours-reminder
+```
+
+For testing, bypass the workday check with:
+
+```sh
+POST /scheduler/hours-reminder?force=true
+```
+
+You can also test the date logic for a specific date:
+
+```sh
+POST /scheduler/hours-reminder?date=2026-06-30
+```
+
+Combine both to force-send the message while calculating expected hours for a specific month:
+
+```sh
+POST /scheduler/hours-reminder?date=2026-06-30&force=true
 ```
 
 Provide per-user DM webhook URLs as JSON in `GOOGLE_CHAT_DM_WEBHOOKS`, keyed by `chatUserId`:

@@ -8,6 +8,7 @@ export interface RotationMember {
 export interface RotationConfig {
   members: RotationMember[];
   activityDate?: string;
+  activityName?: string;
 }
 
 export interface RotationState extends RotationConfig {
@@ -42,6 +43,7 @@ export function getRotationState(
   return {
     members: config.members || [],
     activityDate: config.activityDate,
+    activityName: config.activityName,
     current: getCurrentRotationMember(config, date),
     next: getNextRotationMember(config, date)
   };

@@ -5,6 +5,12 @@ import {
 } from "../services/googleChatNotifier";
 import { getMention } from "../services/rotationMessages";
 import { getRotation, ROTATION_IDS } from "../services/rotationService";
+import {
+  getStockholmDayOfMonth,
+  getTodayDateOnly,
+  isLastWorkdayOfMonth,
+  isWeekday
+} from "../services/workdayService";
 
 const ACTIVITY_REMINDER_DAYS_BEFORE = 45;
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
@@ -43,9 +49,9 @@ async function sendActivityNotification() {
   const rotation = await getRotation(ROTATION_IDS.ACTIVITY);
   const current = rotation.current;
   const mention = current ? getMention(current) : "someone";
-  const message = `Hey the monthly activity is at ${
-    rotation.activityDate || "TBD"
-  }, and responsible is ${mention}.`;
+  const message = `Hey the monthly activity${
+    rotation.activityName ? ` "${rotation.activityName}"` : ""
+  } is at ${rotation.activityDate || "TBD"}, and responsible is ${mention}.`;
 
   const spaceNotification = await postSpaceNotification(message);
 
@@ -56,6 +62,7 @@ async function sendActivityNotification() {
       ? `Hi ${current.displayName}, you're responsible this month.`
       : null,
     current,
+    activityName: rotation.activityName || null,
     activityDate: rotation.activityDate || null,
     spaceNotification
   };
@@ -72,7 +79,10 @@ async function sendMonthlyNotification() {
   const activityMention = activityRotation.current
     ? getMention(activityRotation.current)
     : "someone";
-  const message = `This month ${linkedinMention} is responsible for LinkedIn, and ${activityMention} is responsible for the monthly activity${
+  const activityLabel = activityRotation.activityName
+    ? `monthly activity "${activityRotation.activityName}"`
+    : "monthly activity";
+  const message = `This month ${linkedinMention} is responsible for LinkedIn, and ${activityMention} is responsible for the ${activityLabel}${
     activityRotation.activityDate ? ` on ${activityRotation.activityDate}` : ""
   }.`;
   const spaceNotification = await postSpaceNotification(message);
@@ -85,8 +95,88 @@ async function sendMonthlyNotification() {
     },
     activity: {
       current: activityRotation.current,
+      activityName: activityRotation.activityName || null,
       activityDate: activityRotation.activityDate || null
     },
+    spaceNotification
+  };
+}
+
+function getSchedulerDate(value: unknown) {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return new Date();
+  }
+
+  return new Date(`${value}T12:00:00.000+01:00`);
+}
+
+function formatDaysOff(
+  daysOff: Array<{
+    date: string;
+    name: string;
+  }>
+) {
+  if (!daysOff.length) {
+    return "No days off this month.";
+  }
+
+  return `Days off this month: ${daysOff
+    .map((dayOff) => `${dayOff.date} (${dayOff.name})`)
+    .join(", ")}.`;
+}
+
+async function sendHoursReminder(force = false, now = new Date()) {
+  const today = getTodayDateOnly(now);
+
+  if (!force && getStockholmDayOfMonth(now) < 25) {
+    return {
+      type: "hours-reminder",
+      sent: false,
+      reason: "Before the 25th; skipping Arbetsdag API check",
+      today
+    };
+  }
+
+  if (!force && !isWeekday(now)) {
+    return {
+      type: "hours-reminder",
+      sent: false,
+      reason: "Weekend; skipping Arbetsdag API check",
+      today
+    };
+  }
+
+  const workdayCheck = await isLastWorkdayOfMonth(now);
+
+  if (!force && !workdayCheck.isLastWorkday) {
+    return {
+      type: "hours-reminder",
+      sent: false,
+      reason: "Today is not the last workday of the month",
+      today,
+      lastDayOfMonth: workdayCheck.lastDayOfMonth,
+      remainingWorkdaysInMonth: workdayCheck.remainingWorkdaysInMonth,
+      monthWorkdays: workdayCheck.monthWorkdays,
+      expectedHours: workdayCheck.expectedHours,
+      daysOff: workdayCheck.daysOff
+    };
+  }
+
+  const message = `Reminder: please report your hours for this month. Expected hours: ${workdayCheck.expectedHours}h (${workdayCheck.monthWorkdays} workdays x 8h). ${formatDaysOff(
+    workdayCheck.daysOff
+  )}`;
+  const spaceNotification = await postSpaceNotification(message);
+
+  return {
+    type: "hours-reminder",
+    sent: spaceNotification.delivered,
+    message,
+    today,
+    lastDayOfMonth: workdayCheck.lastDayOfMonth,
+    remainingWorkdaysInMonth: workdayCheck.remainingWorkdaysInMonth,
+    monthWorkdays: workdayCheck.monthWorkdays,
+    expectedHours: workdayCheck.expectedHours,
+    daysOff: workdayCheck.daysOff,
     spaceNotification
   };
 }
@@ -130,9 +220,9 @@ async function sendActivityReminder(force = false) {
 
   const message = `Hi ${
     current?.displayName || "there"
-  }, reminder: you're responsible for the monthly activity on ${
-    rotation.activityDate
-  }. Please start planning now.`;
+  }, reminder: you're responsible for the monthly activity${
+    rotation.activityName ? ` "${rotation.activityName}"` : ""
+  } on ${rotation.activityDate}. Please start planning now.`;
   const dmNotification = await postDmReminder(current?.chatUserId, message);
 
   return {
@@ -141,6 +231,7 @@ async function sendActivityReminder(force = false) {
     message,
     daysUntil,
     current,
+    activityName: rotation.activityName || null,
     activityDate: rotation.activityDate,
     dmNotification
   };
@@ -179,6 +270,23 @@ export function createSchedulerRouter() {
 
   router.post("/monthly", async (_req, res) => {
     res.json(await sendMonthlyNotification());
+  });
+
+  router.post("/hours-reminder", async (req, res) => {
+    try {
+      res.json(
+        await sendHoursReminder(
+          req.query.force === "true",
+          getSchedulerDate(req.query.date)
+        )
+      );
+    } catch (error: any) {
+      res.status(500).json({
+        type: "hours-reminder",
+        sent: false,
+        error: error?.message || "Failed to evaluate workday"
+      });
+    }
   });
 
   return router;

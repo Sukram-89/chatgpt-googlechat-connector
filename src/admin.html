@@ -86,6 +86,14 @@
         margin-bottom: 14px;
       }
 
+      .activity-meta {
+        display: grid;
+        grid-template-columns: 150px minmax(0, 1fr);
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 8px;
+      }
+
       label {
         color: #59636e;
         font-size: 14px;
@@ -187,6 +195,7 @@
         .section-head,
         .user-row,
         .form-row,
+        .activity-meta,
         .date-row {
           grid-template-columns: 1fr;
         }
@@ -208,7 +217,14 @@
           <h1>HoboAI Admin</h1>
           <p>Manage LinkedIn and activity rotations.</p>
         </div>
-        <button onclick="sendSchedulerMessage('monthly')">Send both test messages</button>
+        <div class="actions">
+          <button class="secondary" onclick="sendHoursReminder()">
+            Send hours reminder
+          </button>
+          <button onclick="sendSchedulerMessage('monthly')">
+            Send both test messages
+          </button>
+        </div>
       </header>
 
       <section class="wide-section">
@@ -285,7 +301,12 @@
             </div>
           </div>
 
-          <div class="date-row">
+          <div class="activity-meta">
+            <label for="activityName">Activity name</label>
+            <input id="activityName" placeholder="Sommarfest">
+          </div>
+
+          <div class="activity-meta">
             <label for="activityDate">Activity date</label>
             <input id="activityDate" type="date">
           </div>
@@ -300,6 +321,8 @@
               <tr>
                 <th>Name</th>
                 <th>Email</th>
+                <th>Activity</th>
+                <th>Date</th>
                 <th></th>
               </tr>
             </thead>
@@ -313,7 +336,13 @@
       const state = {
         users: [],
         linkedin: { members: [], current: null, next: null },
-        activity: { members: [], current: null, next: null, activityDate: "" }
+        activity: {
+          members: [],
+          current: null,
+          next: null,
+          activityDate: "",
+          activityName: ""
+        }
       };
 
       function escapeHtml(value) {
@@ -335,8 +364,12 @@
         const next = rotation.next ? getMemberLabel(rotation.next) : "n/a";
         const date =
           type === "activity" ? ` | Date: ${rotation.activityDate || "TBD"}` : "";
+        const activity =
+          type === "activity"
+            ? ` | Activity: ${rotation.activityName || "TBD"}`
+            : "";
 
-        return `Current: ${current} | Next: ${next}${date}`;
+        return `Current: ${current} | Next: ${next}${activity}${date}`;
       }
 
       function getUser(userId) {
@@ -457,6 +490,29 @@
         );
       }
 
+      async function sendHoursReminder() {
+        document.getElementById("usersStatus").innerText = "Sending hours reminder...";
+
+        const response = await fetch("/scheduler/hours-reminder?force=true", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" }
+        });
+
+        if (!response.ok) {
+          document.getElementById("usersStatus").innerText =
+            "Hours reminder failed.";
+          return;
+        }
+
+        const result = await response.json();
+        document.getElementById("usersStatus").innerText =
+          result.spaceNotification?.delivered
+            ? `${state.users.length} users | Hours reminder sent: ${result.message}`
+            : `${state.users.length} users | Hours reminder not delivered: ${
+                result.message || result.error || "unknown error"
+              }`;
+      }
+
       function recomputeRotation(type) {
         const rotation = state[type];
         const now = new Date();
@@ -485,6 +541,12 @@
               <tr>
                 <td>${escapeHtml(member.displayName)}</td>
                 <td>${escapeHtml(getMemberEmail(member))}</td>
+                ${
+                  type === "activity"
+                    ? `<td>${escapeHtml(rotation.activityName || "TBD")}</td>
+                       <td>${escapeHtml(rotation.activityDate || "TBD")}</td>`
+                    : ""
+                }
                 <td>
                   <button class="danger" onclick="removeMember('${type}', ${index})">
                     Remove
@@ -519,10 +581,13 @@
           members: (rotation.members || []).map(syncMemberFromUser),
           current: rotation.current || null,
           next: rotation.next || null,
-          activityDate: rotation.activityDate || ""
+          activityDate: rotation.activityDate || "",
+          activityName: rotation.activityName || ""
         };
 
         if (type === "activity") {
+          document.getElementById("activityName").value =
+            state.activity.activityName || "";
           document.getElementById("activityDate").value =
             state.activity.activityDate || "";
         }
@@ -556,6 +621,7 @@
         };
 
         if (type === "activity") {
+          payload.activityName = document.getElementById("activityName").value;
           payload.activityDate = document.getElementById("activityDate").value;
         }
 
@@ -577,7 +643,8 @@
           members: (rotation.members || []).map(syncMemberFromUser),
           current: rotation.current || null,
           next: rotation.next || null,
-          activityDate: rotation.activityDate || ""
+          activityDate: rotation.activityDate || "",
+          activityName: rotation.activityName || ""
         };
 
         renderRotation(type);
@@ -664,6 +731,11 @@
 
       document.getElementById("activityDate").addEventListener("change", (event) => {
         state.activity.activityDate = event.target.value;
+        renderRotation("activity");
+      });
+
+      document.getElementById("activityName").addEventListener("input", (event) => {
+        state.activity.activityName = event.target.value;
         renderRotation("activity");
       });
     </script>
