@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { COMMAND_IDS, getAdminUrl, HELP_TEXT } from "../config/commands";
 import {
+  createChatResponse,
   extractChatText,
   getChatMessage,
   getSlashCommandId
@@ -91,29 +92,33 @@ export function createGoogleChatRouter() {
       );
 
       if (slashCommandId) {
-        return res.json({
-          text: (await getCommandResponse(slashCommandId)) || "Unknown slash command."
-        });
+        return res.json(
+          createChatResponse(req.body, {
+            text:
+              (await getCommandResponse(String(slashCommandId))) ||
+              "Unknown slash command."
+          })
+        );
       }
 
       const commandResponse = await getCommandResponse(text);
 
       if (commandResponse) {
-        return res.json({ text: commandResponse });
+        return res.json(createChatResponse(req.body, { text: commandResponse }));
       }
 
       if (!text) {
-        return res.json({
-          text: "Hi - mention me with a message or type /help."
-        });
+        return res.json(
+          createChatResponse(req.body, {
+            text: "Hi - mention me with a message or type /help."
+          })
+        );
       }
 
       const thread = message?.thread?.name || "default";
       const reply = await createChatReply(thread, text);
 
-      return res.json({
-        text: reply
-      });
+      return res.json(createChatResponse(req.body, { text: reply }));
     } catch (error: any) {
       const isQuota = error?.status === 429;
 
@@ -126,11 +131,13 @@ export function createGoogleChatRouter() {
         })
       );
 
-      return res.json({
-        text: isQuota
-          ? "AI service quota exceeded. Please check billing."
-          : "I hit an error while responding."
-      });
+      return res.json(
+        createChatResponse(req.body, {
+          text: isQuota
+            ? "AI service quota exceeded. Please check billing."
+            : "I hit an error while responding."
+        })
+      );
     }
   });
 

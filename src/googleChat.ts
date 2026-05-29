@@ -6,9 +6,31 @@ export function getSlashCommandId(body: any) {
   return (
     body?.appCommandMetadata?.appCommandId ||
     body?.chat?.appCommandMetadata?.appCommandId ||
+    body?.chat?.appCommandPayload?.appCommandMetadata?.appCommandId ||
     body?.message?.slashCommand?.commandId ||
+    body?.chat?.messagePayload?.message?.slashCommand?.commandId ||
     null
   );
+}
+
+export function isAppCommandPayload(body: any) {
+  return Boolean(body?.chat?.appCommandPayload);
+}
+
+export function createChatResponse(body: any, message: Record<string, unknown>) {
+  if (isAppCommandPayload(body)) {
+    return {
+      hostAppDataAction: {
+        chatDataAction: {
+          createMessageAction: {
+            message
+          }
+        }
+      }
+    };
+  }
+
+  return message;
 }
 
 export function extractChatText(body: any) {
