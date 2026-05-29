@@ -176,6 +176,23 @@
         justify-content: flex-end;
       }
 
+      .drag-handle {
+        cursor: grab;
+        color: #59636e;
+        font-weight: 700;
+        margin-right: 8px;
+        user-select: none;
+      }
+
+      .drop-target {
+        outline: 2px solid #2f6f4e;
+        outline-offset: -2px;
+      }
+
+      .member-select {
+        min-width: 0;
+      }
+
       @media (max-width: 860px) {
         .grid {
           grid-template-columns: 1fr;
@@ -342,7 +359,8 @@
           next: null,
           activityDate: "",
           activityName: ""
-        }
+        },
+        dragState: { type: null, index: -1 }
       };
 
       function escapeHtml(value) {
@@ -386,6 +404,23 @@
         return user?.email || member.email || "";
       }
 
+      function getMemberUserId(member) {
+        const user = member.userId ? getUser(member.userId) : null;
+        return user?.id || member.userId || "";
+      }
+
+      function getMemberOptions(selectedUserId) {
+        return [
+          '<option value="">Select user</option>',
+          ...state.users.map(
+            (user) =>
+              `<option value="${escapeHtml(user.id)}"${
+                user.id === selectedUserId ? " selected" : ""
+              }>${escapeHtml(user.displayName)}</option>`
+          )
+        ].join("");
+      }
+
       function syncMemberFromUser(member) {
         const user = member.userId ? getUser(member.userId) : null;
 
@@ -399,6 +434,61 @@
           ...(user.chatUserId ? { chatUserId: user.chatUserId } : {}),
           ...(user.email ? { email: user.email } : {})
         };
+      }
+
+      function setDragState(type, index) {
+        state.dragState = { type, index };
+      }
+
+      function moveRotationMember(type, fromIndex, toIndex) {
+        if (fromIndex === toIndex || toIndex < 0) {
+          return;
+        }
+
+        const members = state[type].members;
+
+        if (toIndex >= members.length) {
+          return;
+        }
+
+        const [moved] = members.splice(fromIndex, 1);
+        members.splice(toIndex, 0, moved);
+        renderRotation(type);
+      }
+
+      function dragRotationMember(type, index, event) {
+        if (type !== "linkedin") {
+          return;
+        }
+
+        setDragState(type, index);
+        event.dataTransfer.effectAllowed = "move";
+        event.dataTransfer.setData("text/plain", String(index));
+      }
+
+      function allowDrop(event) {
+        event.preventDefault();
+      }
+
+      function dropRotationMember(type, index, event) {
+        if (type !== "linkedin") {
+          return;
+        }
+
+        event.preventDefault();
+        const fromIndex = Number(event.dataTransfer.getData("text/plain"));
+
+        if (Number.isNaN(fromIndex)) {
+          return;
+        }
+
+        moveRotationMember(type, fromIndex, index);
+        setDragState(null, -1);
+      }
+
+      function dragEndRotationMember() {
+        setDragState(null, -1);
+        renderRotation("linkedin");
       }
 
       function renderUserSelects() {
@@ -538,12 +628,43 @@
         document.getElementById(`${type}Members`).innerHTML = rotation.members
           .map(
             (member, index) => `
-              <tr>
-                <td>${escapeHtml(member.displayName)}</td>
+              <tr
+                ${type === "linkedin" ? "draggable='true'" : ""}
+                ondragstart="${
+                  type === "linkedin"
+                    ? `dragRotationMember('${type}', ${index}, event)`
+                    : ""
+                }"
+                ondragover="${
+                  type === "linkedin" ? "allowDrop(event)" : ""
+                }"
+                ondrop="${
+                  type === "linkedin"
+                    ? `dropRotationMember('${type}', ${index}, event)`
+                    : ""
+                }"
+                ondragend="${type === "linkedin" ? "dragEndRotationMember()" : ""}"
+                class="${
+                  type === "linkedin" && state.dragState.type === "linkedin" && state.dragState.index === index
+                    ? "drop-target"
+                    : ""
+                }"
+              >
+                <td>${
+                  type === "linkedin" ? '<span class="drag-handle">⋮⋮</span>' : ""
+                }${escapeHtml(member.displayName)}</td>
                 <td>${escapeHtml(getMemberEmail(member))}</td>
                 ${
                   type === "activity"
-                    ? `<td>${escapeHtml(rotation.activityName || "TBD")}</td>
+                    ? `<td>
+                         <select
+                           class="member-select"
+                           onchange="updateActivityMember(${index}, this.value)"
+                         >
+                           ${getMemberOptions(getMemberUserId(member))}
+                         </select>
+                       </td>
+                       <td>${escapeHtml(rotation.activityName || "TBD")}</td>
                        <td>${escapeHtml(rotation.activityDate || "TBD")}</td>`
                     : ""
                 }
@@ -608,6 +729,17 @@
 
         userSelect.value = "";
         renderRotation(type);
+      }
+
+      function updateActivityMember(index, userId) {
+        const user = getUser(userId);
+
+        if (!user) {
+          return;
+        }
+
+        state.activity.members[index] = syncMemberFromUser({ userId: user.id });
+        renderRotation("activity");
       }
 
       function removeMember(type, index) {
