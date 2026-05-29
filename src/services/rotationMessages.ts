@@ -5,7 +5,15 @@ export function getMention(member: RotationMember | null) {
     return "n/a";
   }
 
-  return member.chatUserId ? `<users/${member.chatUserId}>` : member.displayName;
+  if (member.chatUserId) {
+    return `<${member.chatUserId}>`;
+  }
+
+  if (member.email) {
+    return `<users/${member.email}>`;
+  }
+
+  return member.displayName;
 }
 
 export function formatRotationNow(label: string, rotation: RotationState) {

@@ -6,7 +6,7 @@ export interface ManagedUser {
   id: string;
   displayName: string;
   chatUserId?: string;
-  email?: string;
+  email: string;
 }
 
 function slugify(value: string) {
@@ -26,17 +26,17 @@ export function sanitizeUser(body: unknown): ManagedUser {
     typeof data.chatUserId === "string" ? data.chatUserId.trim() : "";
   const email = typeof data.email === "string" ? data.email.trim() : "";
   const requestedId = typeof data.id === "string" ? data.id.trim() : "";
-  const id = requestedId || slugify(email || displayName);
+  const id = requestedId || slugify(email);
 
-  if (!id || !displayName) {
-    throw new Error("User requires id and displayName");
+  if (!id || !displayName || !email) {
+    throw new Error("User requires displayName and email");
   }
 
   return {
     id,
     displayName,
-    ...(chatUserId ? { chatUserId } : {}),
-    ...(email ? { email } : {})
+    email,
+    ...(chatUserId ? { chatUserId } : {})
   };
 }
 
@@ -49,11 +49,9 @@ export async function listUsers(): Promise<ManagedUser[]> {
     return {
       id: doc.id,
       displayName: String(data.displayName || doc.id),
+      email: String(data.email || ""),
       ...(typeof data.chatUserId === "string" && data.chatUserId
         ? { chatUserId: data.chatUserId }
-        : {}),
-      ...(typeof data.email === "string" && data.email
-        ? { email: data.email }
         : {})
     };
   });

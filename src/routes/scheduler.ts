@@ -61,6 +61,36 @@ async function sendActivityNotification() {
   };
 }
 
+async function sendMonthlyNotification() {
+  const [linkedinRotation, activityRotation] = await Promise.all([
+    getRotation(ROTATION_IDS.LINKEDIN),
+    getRotation(ROTATION_IDS.ACTIVITY)
+  ]);
+  const linkedinMention = linkedinRotation.current
+    ? getMention(linkedinRotation.current)
+    : "someone";
+  const activityMention = activityRotation.current
+    ? getMention(activityRotation.current)
+    : "someone";
+  const message = `This month ${linkedinMention} is responsible for LinkedIn, and ${activityMention} is responsible for the monthly activity${
+    activityRotation.activityDate ? ` on ${activityRotation.activityDate}` : ""
+  }.`;
+  const spaceNotification = await postSpaceNotification(message);
+
+  return {
+    type: "monthly",
+    message,
+    linkedin: {
+      current: linkedinRotation.current
+    },
+    activity: {
+      current: activityRotation.current,
+      activityDate: activityRotation.activityDate || null
+    },
+    spaceNotification
+  };
+}
+
 async function sendActivityReminder(force = false) {
   const rotation = await getRotation(ROTATION_IDS.ACTIVITY);
   const current = rotation.current;
@@ -148,15 +178,7 @@ export function createSchedulerRouter() {
   });
 
   router.post("/monthly", async (_req, res) => {
-    const [linkedin, activity] = await Promise.all([
-      sendLinkedInNotification(),
-      sendActivityNotification()
-    ]);
-
-    res.json({
-      sent: true,
-      notifications: [linkedin, activity]
-    });
+    res.json(await sendMonthlyNotification());
   });
 
   return router;

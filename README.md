@@ -45,11 +45,13 @@ Test backend-to-webhook posting with:
 POST /scheduler/test-message
 ```
 
-Trigger monthly notifications from Cloud Scheduler with:
+Trigger the combined monthly Infohub notification from Cloud Scheduler on the 1st of every month with:
 
 ```sh
 POST /scheduler/monthly
 ```
+
+That sends one message naming the current LinkedIn responsible and monthly activity responsible.
 
 You can also trigger the notifications individually:
 
@@ -79,3 +81,5 @@ Provide per-user DM webhook URLs as JSON in `GOOGLE_CHAT_DM_WEBHOOKS`, keyed by 
 ```
 
 Incoming webhooks post to the space they were created for. For real 1:1 direct messages, replace the per-user webhook map with Google Chat API authentication and direct-message space creation.
+
+Managed users require an email address. If a canonical Google Chat user ID is not set, rotation messages mention users by email with `<users/person@happyhobos.se>`.

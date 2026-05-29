@@ -32,6 +32,10 @@
       }
 
       header {
+        align-items: start;
+        display: flex;
+        gap: 16px;
+        justify-content: space-between;
         margin-bottom: 24px;
       }
 
@@ -160,8 +164,8 @@
 
       .actions {
         display: flex;
+        gap: 8px;
         justify-content: flex-end;
-        margin-top: 16px;
       }
 
       @media (max-width: 860px) {
@@ -190,14 +194,21 @@
         .section-head {
           display: grid;
         }
+
+        header {
+          display: grid;
+        }
       }
     </style>
   </head>
   <body>
     <main>
       <header>
-        <h1>HoboAI Admin</h1>
-        <p>Manage LinkedIn and activity rotations.</p>
+        <div>
+          <h1>HoboAI Admin</h1>
+          <p>Manage LinkedIn and activity rotations.</p>
+        </div>
+        <button onclick="sendSchedulerMessage('monthly')">Send both test messages</button>
       </header>
 
       <section class="wide-section">
@@ -210,8 +221,8 @@
 
         <div class="form-row user-row">
           <input id="userName" placeholder="Display name">
-          <input id="userEmail" placeholder="Email">
-          <input id="userChatId" placeholder="Chat user id">
+          <input id="userEmail" placeholder="Email" required>
+          <input id="userChatId" placeholder="Chat user id (optional)">
           <button class="secondary" onclick="saveUser()">Add user</button>
         </div>
 
@@ -235,7 +246,12 @@
               <h2>LinkedIn Rotation</h2>
               <p class="status" id="linkedinStatus">Loading...</p>
             </div>
-            <button onclick="saveRotation('linkedin')">Save</button>
+            <div class="actions">
+              <button class="secondary" onclick="sendSchedulerMessage('linkedin')">
+                Send test message
+              </button>
+              <button onclick="saveRotation('linkedin')">Save</button>
+            </div>
           </div>
 
           <div class="form-row">
@@ -261,7 +277,12 @@
               <h2>Activity Rotation</h2>
               <p class="status" id="activityStatus">Loading...</p>
             </div>
-            <button onclick="saveRotation('activity')">Save</button>
+            <div class="actions">
+              <button class="secondary" onclick="sendSchedulerMessage('activity')">
+                Send test message
+              </button>
+              <button onclick="saveRotation('activity')">Save</button>
+            </div>
           </div>
 
           <div class="date-row">
@@ -306,6 +327,16 @@
 
       function setStatus(type, text) {
         document.getElementById(`${type}Status`).innerText = text;
+      }
+
+      function getStatusText(type) {
+        const rotation = state[type];
+        const current = rotation.current ? getMemberLabel(rotation.current) : "n/a";
+        const next = rotation.next ? getMemberLabel(rotation.next) : "n/a";
+        const date =
+          type === "activity" ? ` | Date: ${rotation.activityDate || "TBD"}` : "";
+
+        return `Current: ${current} | Next: ${next}${date}`;
       }
 
       function getUser(userId) {
@@ -372,6 +403,60 @@
           .join("");
       }
 
+      async function sendSchedulerMessage(type) {
+        if (type === "monthly") {
+          setStatus("linkedin", "Sending test message...");
+          setStatus("activity", "Sending test message...");
+        } else {
+          setStatus(type, "Sending test message...");
+        }
+
+        const response = await fetch(`/scheduler/${type}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" }
+        });
+
+        if (!response.ok) {
+          if (type === "monthly") {
+            setStatus("linkedin", "Test message failed.");
+            setStatus("activity", "Test message failed.");
+          } else {
+            setStatus(type, "Test message failed.");
+          }
+          return;
+        }
+
+        const result = await response.json();
+
+        if (type === "monthly") {
+          const delivered = result.spaceNotification?.delivered;
+
+          renderRotation("linkedin");
+          renderRotation("activity");
+          setStatus(
+            "linkedin",
+            `${getStatusText("linkedin")} | ${
+              delivered ? "Combined test sent" : "Combined test not delivered"
+            }`
+          );
+          setStatus(
+            "activity",
+            `${getStatusText("activity")} | ${
+              delivered ? "Combined test sent" : "Combined test not delivered"
+            }`
+          );
+          return;
+        }
+
+        const delivered = result.spaceNotification?.delivered;
+
+        renderRotation(type);
+        setStatus(
+          type,
+          `${getStatusText(type)} | ${delivered ? "Test sent" : "Test not delivered"}`
+        );
+      }
+
       function recomputeRotation(type) {
         const rotation = state[type];
         const now = new Date();
@@ -392,12 +477,7 @@
         recomputeRotation(type);
 
         const rotation = state[type];
-        const current = rotation.current ? getMemberLabel(rotation.current) : "n/a";
-        const next = rotation.next ? getMemberLabel(rotation.next) : "n/a";
-        const date =
-          type === "activity" ? ` | Date: ${rotation.activityDate || "TBD"}` : "";
-
-        setStatus(type, `Current: ${current} | Next: ${next}${date}`);
+        setStatus(type, getStatusText(type));
 
         document.getElementById(`${type}Members`).innerHTML = rotation.members
           .map(
@@ -505,14 +585,20 @@
 
       async function saveUser() {
         const displayNameInput = document.getElementById("userName");
+        const emailInput = document.getElementById("userEmail");
         const payload = {
           displayName: displayNameInput.value.trim(),
-          email: document.getElementById("userEmail").value.trim(),
+          email: emailInput.value.trim(),
           chatUserId: document.getElementById("userChatId").value.trim()
         };
 
         if (!payload.displayName) {
           displayNameInput.focus();
+          return;
+        }
+
+        if (!payload.email) {
+          emailInput.focus();
           return;
         }
 
