@@ -1,1 +1,413 @@
-<!doctype html><html><head><title>HoboAI Admin</title><style>body{font-family:sans-serif;padding:24px;max-width:1000px}section{border:1px solid #ddd;padding:16px;margin-bottom:24px}table{border-collapse:collapse;width:100%;margin-top:12px}td,th{border:1px solid #ddd;padding:8px}input,button{padding:8px;margin:4px}</style></head><body><h1>HoboAI Admin</h1><p>Manage LinkedIn and Activity rotations.</p><section><h2>LinkedIn Rotation</h2><div id='linkedinStatus'>Loading...</div><input id='linkedinName' placeholder='Display name'><input id='linkedinChatId' placeholder='Chat user id'><button onclick='addLinkedInMember()'>Add Member</button><table><thead><tr><th>Name</th><th>Chat ID</th></tr></thead><tbody id='linkedinMembers'></tbody></table></section><section><h2>Activity Rotation</h2><div id='activityStatus'>Loading...</div><input id='activityDate' placeholder='2026-06-15'><br><input id='activityName' placeholder='Display name'><input id='activityChatId' placeholder='Chat user id'><button onclick='addActivityMember()'>Add Member</button><table><thead><tr><th>Name</th><th>Chat ID</th></tr></thead><tbody id='activityMembers'></tbody></table></section><script>async function load(){try{const l=await fetch('/api/linkedin-rotation').then(r=>r.json());document.getElementById('linkedinStatus').innerText='Current: '+(l.current?.displayName||'n/a')+' | Next: '+(l.next?.displayName||'n/a');document.getElementById('linkedinMembers').innerHTML=(l.members||[]).map(m=>`<tr><td>${m.displayName}</td><td>${m.chatUserId||''}</td></tr>`).join('');}catch{} try{const a=await fetch('/api/activity-rotation').then(r=>r.json());document.getElementById('activityStatus').innerText='Current: '+(a.current?.displayName||'n/a')+' | Next: '+(a.next?.displayName||'n/a')+' | Date: '+(a.activityDate||'TBD');document.getElementById('activityDate').value=a.activityDate||'';document.getElementById('activityMembers').innerHTML=(a.members||[]).map(m=>`<tr><td>${m.displayName}</td><td>${m.chatUserId||''}</td></tr>`).join('');}catch{}}</script></body></html>
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>HoboAI Admin</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family:
+          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+          "Segoe UI", sans-serif;
+        line-height: 1.4;
+      }
+
+      body {
+        margin: 0;
+        background: #f7f7f4;
+        color: #1f2328;
+      }
+
+      main {
+        width: min(1100px, calc(100% - 32px));
+        margin: 0 auto;
+        padding: 28px 0 48px;
+      }
+
+      h1,
+      h2,
+      p {
+        margin: 0;
+      }
+
+      header {
+        margin-bottom: 24px;
+      }
+
+      header p {
+        color: #59636e;
+        margin-top: 6px;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 20px;
+      }
+
+      section {
+        background: #fff;
+        border: 1px solid #d8dee4;
+        border-radius: 8px;
+        padding: 18px;
+      }
+
+      .section-head {
+        display: flex;
+        align-items: start;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 16px;
+      }
+
+      .status {
+        color: #59636e;
+        font-size: 14px;
+        margin-top: 4px;
+      }
+
+      .form-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+        gap: 8px;
+        margin-bottom: 14px;
+      }
+
+      .date-row {
+        display: grid;
+        grid-template-columns: 150px minmax(0, 1fr);
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 14px;
+      }
+
+      label {
+        color: #59636e;
+        font-size: 14px;
+      }
+
+      input {
+        box-sizing: border-box;
+        width: 100%;
+        min-height: 38px;
+        border: 1px solid #d0d7de;
+        border-radius: 6px;
+        padding: 8px 10px;
+        font: inherit;
+      }
+
+      table {
+        border-collapse: collapse;
+        width: 100%;
+        table-layout: fixed;
+      }
+
+      th,
+      td {
+        border-top: 1px solid #d8dee4;
+        padding: 10px 8px;
+        text-align: left;
+        vertical-align: middle;
+        word-break: break-word;
+      }
+
+      th {
+        color: #59636e;
+        font-size: 13px;
+        font-weight: 600;
+      }
+
+      th:last-child,
+      td:last-child {
+        width: 92px;
+        text-align: right;
+      }
+
+      button {
+        min-height: 38px;
+        border: 1px solid #2f6f4e;
+        border-radius: 6px;
+        background: #2f6f4e;
+        color: #fff;
+        cursor: pointer;
+        font: inherit;
+        font-weight: 600;
+        padding: 8px 12px;
+        white-space: nowrap;
+      }
+
+      button.secondary {
+        border-color: #d0d7de;
+        background: #fff;
+        color: #1f2328;
+      }
+
+      button.danger {
+        border-color: #c93c37;
+        background: #fff;
+        color: #c93c37;
+      }
+
+      .actions {
+        display: flex;
+        justify-content: flex-end;
+        margin-top: 16px;
+      }
+
+      @media (max-width: 860px) {
+        .grid {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      @media (max-width: 560px) {
+        main {
+          width: min(100% - 20px, 1100px);
+          padding-top: 18px;
+        }
+
+        section {
+          padding: 14px;
+        }
+
+        .section-head,
+        .form-row,
+        .date-row {
+          grid-template-columns: 1fr;
+        }
+
+        .section-head {
+          display: grid;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>HoboAI Admin</h1>
+        <p>Manage LinkedIn and activity rotations.</p>
+      </header>
+
+      <div class="grid">
+        <section>
+          <div class="section-head">
+            <div>
+              <h2>LinkedIn Rotation</h2>
+              <p class="status" id="linkedinStatus">Loading...</p>
+            </div>
+            <button onclick="saveRotation('linkedin')">Save</button>
+          </div>
+
+          <div class="form-row">
+            <input id="linkedinName" placeholder="Display name">
+            <input id="linkedinChatId" placeholder="Chat user id">
+            <button class="secondary" onclick="addMember('linkedin')">Add</button>
+          </div>
+
+          <table>
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Chat ID</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="linkedinMembers"></tbody>
+          </table>
+        </section>
+
+        <section>
+          <div class="section-head">
+            <div>
+              <h2>Activity Rotation</h2>
+              <p class="status" id="activityStatus">Loading...</p>
+            </div>
+            <button onclick="saveRotation('activity')">Save</button>
+          </div>
+
+          <div class="date-row">
+            <label for="activityDate">Activity date</label>
+            <input id="activityDate" type="date">
+          </div>
+
+          <div class="form-row">
+            <input id="activityName" placeholder="Display name">
+            <input id="activityChatId" placeholder="Chat user id">
+            <button class="secondary" onclick="addMember('activity')">Add</button>
+          </div>
+
+          <table>
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Chat ID</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="activityMembers"></tbody>
+          </table>
+        </section>
+      </div>
+    </main>
+
+    <script>
+      const state = {
+        linkedin: { members: [], current: null, next: null },
+        activity: { members: [], current: null, next: null, activityDate: "" }
+      };
+
+      function escapeHtml(value) {
+        return String(value || "")
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;")
+          .replace(/'/g, "&#039;");
+      }
+
+      function setStatus(type, text) {
+        document.getElementById(`${type}Status`).innerText = text;
+      }
+
+      function recomputeRotation(type) {
+        const rotation = state[type];
+        const now = new Date();
+        const members = rotation.members || [];
+
+        if (!members.length) {
+          rotation.current = null;
+          rotation.next = null;
+          return;
+        }
+
+        const index = (now.getFullYear() * 12 + now.getMonth()) % members.length;
+        rotation.current = members[index];
+        rotation.next = members[(index + 1) % members.length];
+      }
+
+      function renderRotation(type) {
+        recomputeRotation(type);
+
+        const rotation = state[type];
+        const current = rotation.current?.displayName || "n/a";
+        const next = rotation.next?.displayName || "n/a";
+        const date =
+          type === "activity" ? ` | Date: ${rotation.activityDate || "TBD"}` : "";
+
+        setStatus(type, `Current: ${current} | Next: ${next}${date}`);
+
+        document.getElementById(`${type}Members`).innerHTML = rotation.members
+          .map(
+            (member, index) => `
+              <tr>
+                <td>${escapeHtml(member.displayName)}</td>
+                <td>${escapeHtml(member.chatUserId || "")}</td>
+                <td>
+                  <button class="danger" onclick="removeMember('${type}', ${index})">
+                    Remove
+                  </button>
+                </td>
+              </tr>
+            `
+          )
+          .join("");
+      }
+
+      async function loadRotation(type) {
+        const response = await fetch(`/api/${type}-rotation`);
+
+        if (!response.ok) {
+          throw new Error(`Could not load ${type} rotation`);
+        }
+
+        const rotation = await response.json();
+        state[type] = {
+          members: rotation.members || [],
+          current: rotation.current || null,
+          next: rotation.next || null,
+          activityDate: rotation.activityDate || ""
+        };
+
+        if (type === "activity") {
+          document.getElementById("activityDate").value =
+            state.activity.activityDate || "";
+        }
+
+        renderRotation(type);
+      }
+
+      function addMember(type) {
+        const nameInput = document.getElementById(`${type}Name`);
+        const chatIdInput = document.getElementById(`${type}ChatId`);
+        const displayName = nameInput.value.trim();
+        const chatUserId = chatIdInput.value.trim();
+
+        if (!displayName) {
+          nameInput.focus();
+          return;
+        }
+
+        state[type].members.push({
+          displayName,
+          ...(chatUserId ? { chatUserId } : {})
+        });
+
+        nameInput.value = "";
+        chatIdInput.value = "";
+        renderRotation(type);
+      }
+
+      function removeMember(type, index) {
+        state[type].members.splice(index, 1);
+        renderRotation(type);
+      }
+
+      async function saveRotation(type) {
+        const payload = {
+          members: state[type].members
+        };
+
+        if (type === "activity") {
+          payload.activityDate = document.getElementById("activityDate").value;
+        }
+
+        setStatus(type, "Saving...");
+
+        const response = await fetch(`/api/${type}-rotation`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+          setStatus(type, "Save failed.");
+          return;
+        }
+
+        const rotation = await response.json();
+        state[type] = {
+          members: rotation.members || [],
+          current: rotation.current || null,
+          next: rotation.next || null,
+          activityDate: rotation.activityDate || ""
+        };
+
+        renderRotation(type);
+      }
+
+      loadRotation("linkedin").catch(() =>
+        setStatus("linkedin", "Could not load LinkedIn rotation.")
+      );
+      loadRotation("activity").catch(() =>
+        setStatus("activity", "Could not load activity rotation.")
+      );
+
+      document.getElementById("activityDate").addEventListener("change", (event) => {
+        state.activity.activityDate = event.target.value;
+        renderRotation("activity");
+      });
+    </script>
+  </body>
+</html>

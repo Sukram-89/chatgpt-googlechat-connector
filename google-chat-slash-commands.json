@@ -1,0 +1,34 @@
+{
+  "slashCommands": [
+    {
+      "commandId": "1",
+      "name": "help",
+      "description": "Show available HoboAI commands."
+    },
+    {
+      "commandId": "2",
+      "name": "linkedinnow",
+      "description": "Show who is currently responsible for LinkedIn."
+    },
+    {
+      "commandId": "3",
+      "name": "linkedinlist",
+      "description": "Show the LinkedIn responsibility rotation."
+    },
+    {
+      "commandId": "4",
+      "name": "activitynow",
+      "description": "Show the current activity owner and activity date."
+    },
+    {
+      "commandId": "5",
+      "name": "activitylist",
+      "description": "Show the activity responsibility rotation."
+    },
+    {
+      "commandId": "6",
+      "name": "admin",
+      "description": "Open the HoboAI admin UI."
+    }
+  ]
+}
