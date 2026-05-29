@@ -15,8 +15,26 @@ const threadMemory = new Map<string, string[]>();
 let linkedInAccessToken: string | null = null;
 let linkedInOauthState: string | null = null;
 
+const COMMANDS = {
+  HELP: "1",
+  LINKEDIN_NOW: "2",
+  LINKEDIN_LIST: "3",
+  ACTIVITY_NOW: "4",
+  ACTIVITY_LIST: "5",
+  ADMIN: "6"
+};
+
 function getChatMessage(body: any) {
   return body?.chat?.messagePayload?.message || body?.message;
+}
+
+function getSlashCommandId(body: any) {
+  return (
+    body?.appCommandMetadata?.appCommandId ||
+    body?.chat?.appCommandMetadata?.appCommandId ||
+    body?.message?.slashCommand?.commandId ||
+    null
+  );
 }
 
 function extractChatText(body: any) {
@@ -62,6 +80,55 @@ async function saveAssignment(
   });
 }
 
+async function handleSlashCommand(commandId: string, req: any, res: any) {
+  switch (commandId) {
+    case COMMANDS.HELP:
+      return res.json({
+        text:
+          "Commands: /help, /linkedinlist, /linkedinnow, /activitylist, /activitynow, /admin"
+      });
+
+    case COMMANDS.LINKEDIN_NOW:
+      return res.json({
+        text: JSON.stringify(
+          await getCurrentAssignment("linkedin_assignments")
+        )
+      });
+
+    case COMMANDS.LINKEDIN_LIST:
+      return res.json({
+        text: JSON.stringify(
+          await getAssignments("linkedin_assignments")
+        )
+      });
+
+    case COMMANDS.ACTIVITY_NOW:
+      return res.json({
+        text: JSON.stringify(
+          await getCurrentAssignment("activity_assignments")
+        )
+      });
+
+    case COMMANDS.ACTIVITY_LIST:
+      return res.json({
+        text: JSON.stringify(
+          await getAssignments("activity_assignments")
+        )
+      });
+
+    case COMMANDS.ADMIN:
+      return res.json({
+        text:
+          "Admin UI: https://chatgpt-googlechat-connector-974238519156.europe-west1.run.app/admin"
+      });
+
+    default:
+      return res.json({
+        text: "Unknown slash command."
+      });
+  }
+}
+
 app.get("/", (_req, res) => {
   res.json({ status: "ok" });
 });
@@ -73,7 +140,8 @@ app.get("/help", (_req, res) => {
       "/linkedinlist",
       "/linkedinnow",
       "/activitylist",
-      "/activitynow"
+      "/activitynow",
+      "/admin"
     ]
   });
 });
@@ -221,16 +289,22 @@ app.post("/", async (req, res) => {
 
     const message = getChatMessage(req.body);
     const text = extractChatText(req.body);
+    const slashCommandId = getSlashCommandId(req.body);
 
     console.log(
       JSON.stringify({
         type: "google_chat_event",
         eventType: req.body?.type,
+        slashCommandId,
         hasArgumentText: Boolean(message?.argumentText),
         hasText: Boolean(message?.text),
         parsedText: text
       })
     );
+
+    if (slashCommandId) {
+      return handleSlashCommand(slashCommandId, req, res);
+    }
 
     if (!text) {
       return res.json({
@@ -241,7 +315,7 @@ app.post("/", async (req, res) => {
     if (text === "/help" || text.toLowerCase() === "help") {
       return res.json({
         text:
-          "Commands: /help, /linkedinlist, /linkedinnow, /activitylist, /activitynow"
+          "Commands: /help, /linkedinlist, /linkedinnow, /activitylist, /activitynow, /admin"
       });
     }
 
@@ -277,8 +351,14 @@ app.post("/", async (req, res) => {
       });
     }
 
-    const thread =
-      message?.thread?.name || "default";
+    if (text === "/admin") {
+      return res.json({
+        text:
+          "Admin UI: https://chatgpt-googlechat-connector-974238519156.europe-west1.run.app/admin"
+      });
+    }
+
+    const thread = message?.thread?.name || "default";
 
     const history = threadMemory.get(thread) || [];
 
