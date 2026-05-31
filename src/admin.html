@@ -318,16 +318,6 @@
             </div>
           </div>
 
-          <div class="activity-meta">
-            <label for="activityName">Activity name</label>
-            <input id="activityName" placeholder="Sommarfest">
-          </div>
-
-          <div class="activity-meta">
-            <label for="activityDate">Activity date</label>
-            <input id="activityDate" type="date">
-          </div>
-
           <div class="form-row">
             <select id="activityUser"></select>
             <button class="secondary" onclick="addMember('activity')">Add</button>
@@ -625,7 +615,7 @@
         const rotation = state[type];
         setStatus(type, getStatusText(type));
 
-        document.getElementById(`${type}Members`).innerHTML = rotation.members
+        const rows = rotation.members
           .map(
             (member, index) => `
               <tr
@@ -677,6 +667,29 @@
             `
           )
           .join("");
+
+        const activityDetailsRow =
+          type === "activity"
+            ? `
+              <tr class="activity-details">
+                <td colspan="2">Activity details</td>
+                <td>
+                  <input id="activityName" placeholder="Sommarfest" value="${escapeHtml(
+                    rotation.activityName || ""
+                  )}" oninput="updateActivityConfig('activityName', this.value)">
+                </td>
+                <td>
+                  <input id="activityDate" type="date" value="${escapeHtml(
+                    rotation.activityDate || ""
+                  )}" oninput="updateActivityConfig('activityDate', this.value)">
+                </td>
+                <td></td>
+              </tr>
+            `
+            : "";
+
+        document.getElementById(`${type}Members`).innerHTML =
+          activityDetailsRow + rows;
       }
 
       async function loadUsers() {
@@ -729,6 +742,10 @@
 
         userSelect.value = "";
         renderRotation(type);
+      }
+
+      function updateActivityConfig(field, value) {
+        state.activity[field] = value;
       }
 
       function updateActivityMember(index, userId) {
@@ -861,15 +878,6 @@
           document.getElementById("usersStatus").innerText = "Could not load users.";
         });
 
-      document.getElementById("activityDate").addEventListener("change", (event) => {
-        state.activity.activityDate = event.target.value;
-        renderRotation("activity");
-      });
-
-      document.getElementById("activityName").addEventListener("input", (event) => {
-        state.activity.activityName = event.target.value;
-        renderRotation("activity");
-      });
     </script>
   </body>
 </html>
