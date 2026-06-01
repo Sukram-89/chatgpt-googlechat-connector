@@ -156,6 +156,26 @@
         text-align: right;
       }
 
+      .linkedin-month {
+        width: 64px;
+      }
+
+      .linkedin-name {
+        width: 160px;
+      }
+
+      .linkedin-actions {
+        display: flex;
+        gap: 4px;
+        justify-content: flex-end;
+        min-width: 160px;
+      }
+
+      .linkedin-actions button {
+        min-height: 30px;
+        padding: 4px 8px;
+      }
+
       button {
         min-height: 38px;
         border: 1px solid #2f6f4e;
@@ -223,13 +243,35 @@
 
       .activity-panel-grid {
         display: grid;
-        grid-template-columns: minmax(0, 1.4fr) minmax(180px, 0.8fr) minmax(0, 1fr) auto;
+        grid-template-columns: minmax(0, 1.2fr) minmax(160px, 0.7fr) minmax(0, 1fr) auto;
         gap: 8px;
       }
 
       .activity-panel-grid input,
       .activity-panel-grid select {
         min-width: 0;
+      }
+
+      .activity-add-row {
+        display: grid;
+        gap: 8px;
+        grid-template-columns: minmax(0, 1.2fr) minmax(160px, 0.7fr) minmax(0, 1fr) auto;
+        margin-bottom: 14px;
+      }
+
+      .activity-add-row input,
+      .activity-add-row select {
+        min-width: 0;
+      }
+
+      .activity-input {
+        min-width: 0;
+      }
+
+      .list-actions {
+        display: flex;
+        justify-content: center;
+        margin-top: 12px;
       }
 
       @media (max-width: 860px) {
@@ -256,6 +298,7 @@
         .user-row,
         .form-row,
         .activity-panel-head,
+        .activity-add-row,
         .activity-panel-grid,
         .date-row {
           grid-template-columns: 1fr;
@@ -312,13 +355,18 @@
           <table>
             <thead>
               <tr>
-                <th>Name</th>
-                <th>Email</th>
+                <th class="linkedin-name">Name</th>
+                <th class="linkedin-month">Month</th>
                 <th></th>
               </tr>
             </thead>
             <tbody id="linkedinMembers"></tbody>
           </table>
+          <div class="list-actions">
+            <button class="secondary" onclick="toggleRotationList('linkedin')" id="linkedinToggle">
+              Show next 5
+            </button>
+          </div>
         </section>
 
         <section>
@@ -340,9 +388,9 @@
               <strong>Activity details</strong>
               <span class="status" id="activityMetaStatus">Loading...</span>
             </div>
-            <div class="activity-panel-grid">
-              <input id="activityName" placeholder="Sommarfest" oninput="updateActivityConfig('activityName', this.value)">
-              <input id="activityDate" type="date" oninput="updateActivityConfig('activityDate', this.value)">
+            <div class="activity-add-row">
+              <input id="activityAddName" placeholder="Activity name">
+              <input id="activityAddDate" type="date">
               <select id="activityUser"></select>
               <button class="secondary" onclick="addMember('activity')">Add</button>
             </div>
@@ -352,7 +400,7 @@
             <thead>
               <tr>
                 <th>Name</th>
-                <th>Email</th>
+                <th>Date</th>
                 <th>Assigned</th>
                 <th></th>
               </tr>
@@ -403,7 +451,7 @@
           activityDate: "",
           activityName: ""
         },
-        dragState: { type: null, index: -1 }
+        linkedinExpanded: false,
       };
 
       function escapeHtml(value) {
@@ -469,6 +517,60 @@
         ].join("");
       }
 
+      function getMonthName(index) {
+        return new Intl.DateTimeFormat("en", { month: "long" }).format(
+          new Date(2026, index, 1)
+        );
+      }
+
+      function getVisibleLinkedInMembers(rotation) {
+        const members = rotation.members || [];
+
+        if (!members.length) {
+          return [];
+        }
+
+        const startIndex = new Date().getMonth() % members.length;
+        const ordered = members
+          .slice(startIndex)
+          .concat(members.slice(0, startIndex));
+
+        return ordered.map((member, visibleIndex) => ({
+          member,
+          actualIndex: (startIndex + visibleIndex) % members.length,
+          monthLabel: getMonthName((new Date().getMonth() + visibleIndex) % 12)
+        }));
+      }
+
+      function getSortedActivityMembers(rotation) {
+        return (rotation.members || [])
+          .map((member, index) => ({
+            member,
+            actualIndex: index,
+            sortDate: member.activityDate || "",
+            sortName: member.activityName || "",
+            sortIndex: index
+          }))
+          .sort((a, b) => {
+            const aHasDate = Boolean(a.sortDate);
+            const bHasDate = Boolean(b.sortDate);
+
+            if (aHasDate !== bHasDate) {
+              return aHasDate ? -1 : 1;
+            }
+
+            if (a.sortDate !== b.sortDate) {
+              return a.sortDate.localeCompare(b.sortDate);
+            }
+
+            if (a.sortName !== b.sortName) {
+              return a.sortName.localeCompare(b.sortName);
+            }
+
+            return a.sortIndex - b.sortIndex;
+          });
+      }
+
       function syncMemberFromUser(member) {
         const user = member.userId ? getUser(member.userId) : null;
 
@@ -480,12 +582,14 @@
           userId: user.id,
           displayName: user.displayName,
           ...(user.chatUserId ? { chatUserId: user.chatUserId } : {}),
-          ...(user.email ? { email: user.email } : {})
+          ...(user.email ? { email: user.email } : {}),
+          ...(typeof member.activityName === "string" && member.activityName.trim()
+            ? { activityName: member.activityName.trim() }
+            : {}),
+          ...(typeof member.activityDate === "string" && member.activityDate.trim()
+            ? { activityDate: member.activityDate.trim() }
+            : {})
         };
-      }
-
-      function setDragState(type, index) {
-        state.dragState = { type, index };
       }
 
       function moveRotationMember(type, fromIndex, toIndex) {
@@ -504,39 +608,14 @@
         renderRotation(type);
       }
 
-      function dragRotationMember(type, index, event) {
-        if (type !== "linkedin") {
+      function moveLinkedInMember(index, direction) {
+        const targetIndex = index + direction;
+
+        if (targetIndex < 0 || targetIndex >= state.linkedin.members.length) {
           return;
         }
 
-        setDragState(type, index);
-        event.dataTransfer.effectAllowed = "move";
-        event.dataTransfer.setData("text/plain", String(index));
-      }
-
-      function allowDrop(event) {
-        event.preventDefault();
-      }
-
-      function dropRotationMember(type, index, event) {
-        if (type !== "linkedin") {
-          return;
-        }
-
-        event.preventDefault();
-        const fromIndex = Number(event.dataTransfer.getData("text/plain"));
-
-        if (Number.isNaN(fromIndex)) {
-          return;
-        }
-
-        moveRotationMember(type, fromIndex, index);
-        setDragState(null, -1);
-      }
-
-      function dragEndRotationMember() {
-        setDragState(null, -1);
-        renderRotation("linkedin");
+        moveRotationMember("linkedin", index, targetIndex);
       }
 
       function renderUserSelects() {
@@ -672,65 +751,87 @@
 
         const rotation = state[type];
         setStatus(type, getStatusText(type));
+
+        const displayMembers =
+          type === "linkedin"
+            ? getVisibleLinkedInMembers(rotation)
+            : getSortedActivityMembers(rotation);
+
         if (type === "activity") {
+          const firstActivity = displayMembers[0]?.member || null;
           setActivityMetaStatus(
-            `${rotation.activityName || "Activity"} on ${rotation.activityDate || "TBD"}`
+            `${firstActivity?.activityName || "Activity"} on ${
+              firstActivity?.activityDate || "TBD"
+            }`
           );
         }
 
-        const rows = rotation.members
-          .map(
-            (member, index) => `
-              <tr
-                ${type === "linkedin" ? "draggable='true'" : ""}
-                ondragstart="${
-                  type === "linkedin"
-                    ? `dragRotationMember('${type}', ${index}, event)`
-                    : ""
-                }"
-                ondragover="${
-                  type === "linkedin" ? "allowDrop(event)" : ""
-                }"
-                ondrop="${
-                  type === "linkedin"
-                    ? `dropRotationMember('${type}', ${index}, event)`
-                    : ""
-                }"
-                ondragend="${type === "linkedin" ? "dragEndRotationMember()" : ""}"
-                class="${
-                  type === "linkedin" && state.dragState.type === "linkedin" && state.dragState.index === index
-                    ? "drop-target"
-                    : ""
-                }"
-              >
-                <td>${
-                  type === "linkedin" ? '<span class="drag-handle">⋮⋮</span>' : ""
-                }${escapeHtml(member.displayName)}</td>
-                <td>${escapeHtml(getMemberEmail(member))}</td>
-                ${
-                  type === "activity"
-                    ? `<td>
-                         <select
-                           class="member-select"
-                           onchange="updateActivityMember(${index}, this.value)"
-                         >
-                           ${getMemberOptions(getMemberUserId(member))}
-                         </select>
-                       </td>
-                       `
-                    : ""
-                }
-                <td>
-                  <button class="danger" onclick="removeMember('${type}', ${index})">
-                    Remove
-                  </button>
-                </td>
-              </tr>
-            `
-          )
-          .join("");
+        const visibleMembers =
+          type === "linkedin" && !state.linkedinExpanded
+            ? displayMembers.slice(0, Math.min(5, displayMembers.length))
+            : displayMembers;
+
+        const rows =
+          type === "activity"
+            ? visibleMembers
+                .map(
+                  ({ member, actualIndex }) => `
+                    <tr>
+                      <td><input class="activity-input" value="${escapeHtml(
+                        member.activityName || ""
+                      )}" oninput="updateActivityMemberField(${actualIndex}, 'activityName', this.value)"></td>
+                      <td><input class="activity-input" type="date" value="${escapeHtml(
+                        member.activityDate || ""
+                      )}" oninput="updateActivityMemberField(${actualIndex}, 'activityDate', this.value)"></td>
+                      <td>
+                        <select
+                          class="member-select"
+                          onchange="updateActivityMember(${actualIndex}, this.value)"
+                        >
+                          ${getMemberOptions(getMemberUserId(member))}
+                        </select>
+                      </td>
+                      <td>
+                        <button class="danger" onclick="removeMember('${type}', ${actualIndex})">
+                          Remove
+                        </button>
+                      </td>
+                    </tr>
+                  `
+                )
+                .join("")
+            : visibleMembers
+                .map(
+                  ({ member, actualIndex, monthLabel }) => `
+                    <tr>
+                      <td>${escapeHtml(member.displayName)}</td>
+                      <td>${escapeHtml(monthLabel)}</td>
+                      <td>
+                        <div class="linkedin-actions">
+                          <button class="secondary" onclick="moveLinkedInMember(${actualIndex}, -1)" ${
+                            actualIndex === 0 ? "disabled" : ""
+                          }>↑</button>
+                          <button class="secondary" onclick="moveLinkedInMember(${actualIndex}, 1)" ${
+                            actualIndex === rotation.members.length - 1 ? "disabled" : ""
+                          }>↓</button>
+                          <button class="danger" onclick="removeMember('linkedin', ${actualIndex})">
+                            Remove
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  `
+                )
+                .join("");
 
         document.getElementById(`${type}Members`).innerHTML = rows;
+
+        if (type === "linkedin") {
+          const toggle = document.getElementById("linkedinToggle");
+          if (toggle) {
+            toggle.innerText = state.linkedinExpanded ? "Collapse" : "Show next 5";
+          }
+        }
       }
 
       async function loadUsers() {
@@ -761,8 +862,8 @@
         };
 
         if (type === "activity") {
-          const activityNameInput = document.getElementById("activityName");
-          const activityDateInput = document.getElementById("activityDate");
+          const activityNameInput = document.getElementById("activityAddName");
+          const activityDateInput = document.getElementById("activityAddDate");
 
           if (activityNameInput) {
             activityNameInput.value = state.activity.activityName || "";
@@ -785,19 +886,35 @@
           return;
         }
 
+        if (type === "activity") {
+          const activityNameInput = document.getElementById("activityAddName");
+          const activityDateInput = document.getElementById("activityAddDate");
+
+          state[type].members.push(
+            syncMemberFromUser({
+              userId: user.id,
+              activityName: activityNameInput.value.trim(),
+              activityDate: activityDateInput.value.trim()
+            })
+          );
+
+          if (activityNameInput) {
+            activityNameInput.value = "";
+          }
+
+          if (activityDateInput) {
+            activityDateInput.value = "";
+          }
+
+          userSelect.value = "";
+          renderRotation(type);
+          return;
+        }
+
         state[type].members.push(syncMemberFromUser({ userId: user.id }));
 
         userSelect.value = "";
         renderRotation(type);
-      }
-
-      function updateActivityConfig(field, value) {
-        state.activity[field] = value;
-        setActivityMetaStatus(
-          `${state.activity.activityName || "Activity"} on ${
-            state.activity.activityDate || "TBD"
-          }`
-        );
       }
 
       function updateActivityMember(index, userId) {
@@ -811,9 +928,33 @@
         renderRotation("activity");
       }
 
+      function updateActivityMemberField(index, field, value) {
+        const member = state.activity.members[index];
+
+        if (!member) {
+          return;
+        }
+
+        state.activity.members[index] = {
+          ...member,
+          [field]: value
+        };
+
+        renderRotation("activity");
+      }
+
       function removeMember(type, index) {
         state[type].members.splice(index, 1);
         renderRotation(type);
+      }
+
+      function toggleRotationList(type) {
+        if (type !== "linkedin") {
+          return;
+        }
+
+        state.linkedinExpanded = !state.linkedinExpanded;
+        renderRotation("linkedin");
       }
 
       async function saveRotation(type) {
@@ -822,8 +963,8 @@
         };
 
         if (type === "activity") {
-          payload.activityName = document.getElementById("activityName").value;
-          payload.activityDate = document.getElementById("activityDate").value;
+          payload.activityName = state.activity.members[0]?.activityName || "";
+          payload.activityDate = state.activity.members[0]?.activityDate || "";
         }
 
         setStatus(type, "Saving...");

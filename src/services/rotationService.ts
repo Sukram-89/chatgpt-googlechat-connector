@@ -4,9 +4,10 @@ import {
   RotationMember,
   RotationState
 } from "../rotation";
-import { db } from "./firestore";
-
-const ROTATION_COLLECTION = "rotation_configs";
+import {
+  getRotationConfigData,
+  saveRotationConfigData
+} from "./firestore";
 
 export const ROTATION_IDS = {
   LINKEDIN: "linkedin",
@@ -31,6 +32,10 @@ export function sanitizeMembers(members: unknown): RotationMember[] {
       const chatUserId =
         typeof data.chatUserId === "string" ? data.chatUserId.trim() : "";
       const email = typeof data.email === "string" ? data.email.trim() : "";
+      const activityName =
+        typeof data.activityName === "string" ? data.activityName.trim() : "";
+      const activityDate =
+        typeof data.activityDate === "string" ? data.activityDate.trim() : "";
 
       if (!displayName) {
         return null;
@@ -40,7 +45,9 @@ export function sanitizeMembers(members: unknown): RotationMember[] {
         displayName,
         ...(userId ? { userId } : {}),
         ...(chatUserId ? { chatUserId } : {}),
-        ...(email ? { email } : {})
+        ...(email ? { email } : {}),
+        ...(activityName ? { activityName } : {}),
+        ...(activityDate ? { activityDate } : {})
       };
     })
     .filter((member): member is RotationMember => Boolean(member));
@@ -64,16 +71,15 @@ export function sanitizeRotationConfig(body: unknown): RotationConfig {
 export async function getRotationConfig(
   rotationId: string
 ): Promise<RotationConfig> {
-  const doc = await db.collection(ROTATION_COLLECTION).doc(rotationId).get();
-  const data = doc.exists ? doc.data() : null;
+  const config = await getRotationConfigData(rotationId);
 
   return {
-    members: sanitizeMembers(data?.members),
-    ...(typeof data?.activityDate === "string" && data.activityDate.trim()
-      ? { activityDate: data.activityDate.trim() }
+    members: sanitizeMembers(config.members),
+    ...(typeof config.activityDate === "string" && config.activityDate.trim()
+      ? { activityDate: config.activityDate.trim() }
       : {}),
-    ...(typeof data?.activityName === "string" && data.activityName.trim()
-      ? { activityName: data.activityName.trim() }
+    ...(typeof config.activityName === "string" && config.activityName.trim()
+      ? { activityName: config.activityName.trim() }
       : {})
   };
 }
@@ -86,15 +92,7 @@ export async function saveRotationConfig(
   rotationId: string,
   config: RotationConfig
 ): Promise<RotationState> {
-  await db.collection(ROTATION_COLLECTION).doc(rotationId).set(
-    {
-      members: config.members,
-      activityDate: config.activityDate || null,
-      activityName: config.activityName || null,
-      updatedAt: new Date().toISOString()
-    },
-    { merge: true }
-  );
+  await saveRotationConfigData(rotationId, config);
 
   return getRotationState(config);
 }

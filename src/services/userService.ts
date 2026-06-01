@@ -1,6 +1,8 @@
-import { db } from "./firestore";
-
-const USERS_COLLECTION = "users";
+import {
+  deleteUserData,
+  listUsersData,
+  saveUserData
+} from "./firestore";
 
 export interface ManagedUser {
   id: string;
@@ -41,36 +43,22 @@ export function sanitizeUser(body: unknown): ManagedUser {
 }
 
 export async function listUsers(): Promise<ManagedUser[]> {
-  const snapshot = await db.collection(USERS_COLLECTION).orderBy("displayName").get();
+  const users = await listUsersData();
 
-  return snapshot.docs.map((doc) => {
-    const data = doc.data();
-
-    return {
-      id: doc.id,
-      displayName: String(data.displayName || doc.id),
-      email: String(data.email || ""),
-      ...(typeof data.chatUserId === "string" && data.chatUserId
-        ? { chatUserId: data.chatUserId }
-        : {})
-    };
-  });
+  return users.map((user) => ({
+    id: user.id,
+    displayName: user.displayName,
+    email: user.email,
+    ...(user.chatUserId ? { chatUserId: user.chatUserId } : {})
+  }));
 }
 
 export async function saveUser(user: ManagedUser) {
-  await db.collection(USERS_COLLECTION).doc(user.id).set(
-    {
-      displayName: user.displayName,
-      chatUserId: user.chatUserId || null,
-      email: user.email || null,
-      updatedAt: new Date().toISOString()
-    },
-    { merge: true }
-  );
+  await saveUserData(user);
 
   return user;
 }
 
 export async function deleteUser(userId: string) {
-  await db.collection(USERS_COLLECTION).doc(userId).delete();
+  await deleteUserData(userId);
 }

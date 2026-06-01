@@ -3,6 +3,8 @@ export interface RotationMember {
   userId?: string;
   chatUserId?: string;
   email?: string;
+  activityName?: string;
+  activityDate?: string;
 }
 
 export interface RotationConfig {
