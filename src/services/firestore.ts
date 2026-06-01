@@ -12,11 +12,15 @@ interface StoredRotationConfig extends RotationConfig {
   updatedAt?: string;
 }
 
+const isCloudRuntime =
+  Boolean(process.env.K_SERVICE) ||
+  Boolean(process.env.K_REVISION) ||
+  Boolean(process.env.GOOGLE_CLOUD_PROJECT) ||
+  Boolean(process.env.GCLOUD_PROJECT);
+
 const useMockData =
-  process.env.USE_MOCK_DATA !== "false" &&
-  !process.env.GOOGLE_CLOUD_PROJECT &&
-  !process.env.GCLOUD_PROJECT &&
-  !process.env.FIRESTORE_EMULATOR_HOST;
+  process.env.USE_MOCK_DATA === "true" ||
+  (!isCloudRuntime && !process.env.FIRESTORE_EMULATOR_HOST);
 
 let realDb: Firestore | null = null;
 
