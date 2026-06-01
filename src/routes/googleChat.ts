@@ -118,33 +118,72 @@ export function createGoogleChatRouter() {
       );
 
       if (slashCommandId) {
-        return res.json(
-          createChatResponse(req.body, {
-            text:
-              (await getCommandResponse(String(slashCommandId))) ||
-              "Unknown slash command."
+        const responseBody = createChatResponse(req.body, {
+          text:
+            (await getCommandResponse(String(slashCommandId))) ||
+            "Unknown slash command."
+        });
+
+        console.log(
+          JSON.stringify({
+            type: "google_chat_response",
+            mode: "slash_command",
+            responseBody
           })
         );
+
+        return res.json(responseBody);
       }
 
       const commandResponse = await getCommandResponse(text);
 
       if (commandResponse) {
-        return res.json(createChatResponse(req.body, { text: commandResponse }));
+        const responseBody = createChatResponse(req.body, {
+          text: commandResponse
+        });
+
+        console.log(
+          JSON.stringify({
+            type: "google_chat_response",
+            mode: "command_text",
+            responseBody
+          })
+        );
+
+        return res.json(responseBody);
       }
 
       if (!text) {
-        return res.json(
-          createChatResponse(req.body, {
-            text: "Hi - mention me with a message or type /help."
+        const responseBody = createChatResponse(req.body, {
+          text: "Hi - mention me with a message or type /help."
+        });
+
+        console.log(
+          JSON.stringify({
+            type: "google_chat_response",
+            mode: "empty_text",
+            responseBody
           })
         );
+
+        return res.json(responseBody);
       }
 
       const thread = message?.thread?.name || "default";
       const reply = await createChatReply(thread, text);
+      const responseBody = createChatResponse(req.body, { text: reply });
 
-      return res.json(createChatResponse(req.body, { text: reply }));
+      console.log(
+        JSON.stringify({
+          type: "google_chat_response",
+          mode: "ai_reply",
+          thread,
+          reply,
+          responseBody
+        })
+      );
+
+      return res.json(responseBody);
     } catch (error: any) {
       const isQuota = error?.status === 429;
 
