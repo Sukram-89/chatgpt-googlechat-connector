@@ -28,19 +28,15 @@ export function isAppCommandPayload(body: any) {
 }
 
 export function createChatResponse(body: any, message: Record<string, unknown>) {
-  if (isAppCommandPayload(body)) {
-    return {
-      hostAppDataAction: {
-        chatDataAction: {
-          createMessageAction: {
-            message
-          }
+  return {
+    hostAppDataAction: {
+      chatDataAction: {
+        createMessageAction: {
+          message
         }
       }
-    };
-  }
-
-  return message;
+    }
+  };
 }
 
 export function extractChatText(body: any) {
