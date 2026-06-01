@@ -343,7 +343,6 @@
               <button class="secondary" onclick="sendSchedulerMessage('linkedin')">
                 Send test message
               </button>
-              <button onclick="saveRotation('linkedin')">Save</button>
             </div>
           </div>
 
@@ -364,7 +363,7 @@
           </table>
           <div class="list-actions">
             <button class="secondary" onclick="toggleRotationList('linkedin')" id="linkedinToggle">
-              Show next 5
+              Expand
             </button>
           </div>
         </section>
@@ -379,7 +378,6 @@
               <button class="secondary" onclick="sendSchedulerMessage('activity')">
                 Send test message
               </button>
-              <button onclick="saveRotation('activity')">Save</button>
             </div>
           </div>
 
@@ -452,6 +450,11 @@
           activityName: ""
         },
         linkedinExpanded: false,
+      };
+
+      const saveTimers = {
+        linkedin: null,
+        activity: null
       };
 
       function escapeHtml(value) {
@@ -616,6 +619,7 @@
         }
 
         moveRotationMember("linkedin", index, targetIndex);
+        persistRotation("linkedin").catch(() => {});
       }
 
       function renderUserSelects() {
@@ -829,7 +833,7 @@
         if (type === "linkedin") {
           const toggle = document.getElementById("linkedinToggle");
           if (toggle) {
-            toggle.innerText = state.linkedinExpanded ? "Collapse" : "Show next 5";
+            toggle.innerText = state.linkedinExpanded ? "Collapse" : "Expand";
           }
         }
       }
@@ -908,6 +912,7 @@
 
           userSelect.value = "";
           renderRotation(type);
+          persistRotation(type).catch(() => {});
           return;
         }
 
@@ -915,6 +920,7 @@
 
         userSelect.value = "";
         renderRotation(type);
+        persistRotation(type).catch(() => {});
       }
 
       function updateActivityMember(index, userId) {
@@ -924,7 +930,11 @@
           return;
         }
 
-        state.activity.members[index] = syncMemberFromUser({ userId: user.id });
+        state.activity.members[index] = syncMemberFromUser({
+          ...state.activity.members[index],
+          userId: user.id
+        });
+        persistRotation("activity").catch(() => {});
       }
 
       function updateActivityMemberField(index, field, value) {
@@ -938,11 +948,13 @@
           ...member,
           [field]: value
         };
+        scheduleRotationSave("activity");
       }
 
       function removeMember(type, index) {
         state[type].members.splice(index, 1);
         renderRotation(type);
+        persistRotation(type).catch(() => {});
       }
 
       function toggleRotationList(type) {
@@ -954,17 +966,31 @@
         renderRotation("linkedin");
       }
 
-      async function saveRotation(type) {
+      function scheduleRotationSave(type, delay = 350) {
+        if (saveTimers[type]) {
+          clearTimeout(saveTimers[type]);
+        }
+
+        saveTimers[type] = setTimeout(() => {
+          persistRotation(type).catch(() => {});
+        }, delay);
+      }
+
+      async function persistRotation(type) {
         const payload = {
           members: state[type].members.map(syncMemberFromUser)
         };
 
         if (type === "activity") {
-          payload.activityName = state.activity.members[0]?.activityName || "";
-          payload.activityDate = state.activity.members[0]?.activityDate || "";
+          payload.activityName = state.activity.activityName || "";
+          payload.activityDate = state.activity.activityDate || "";
         }
 
         setStatus(type, "Saving...");
+        if (saveTimers[type]) {
+          clearTimeout(saveTimers[type]);
+          saveTimers[type] = null;
+        }
 
         const response = await fetch(`/api/${type}-rotation`, {
           method: "POST",
@@ -979,14 +1005,15 @@
 
         const rotation = await response.json();
         state[type] = {
+          ...state[type],
           members: (rotation.members || []).map(syncMemberFromUser),
           current: rotation.current || null,
           next: rotation.next || null,
-          activityDate: rotation.activityDate || "",
-          activityName: rotation.activityName || ""
+          activityDate: rotation.activityDate || state[type].activityDate || "",
+          activityName: rotation.activityName || state[type].activityName || ""
         };
 
-        renderRotation(type);
+        setStatus(type, `${getStatusText(type)} | Saved`);
       }
 
       async function saveUser() {
