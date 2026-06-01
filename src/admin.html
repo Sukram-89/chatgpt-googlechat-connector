@@ -925,7 +925,6 @@
         }
 
         state.activity.members[index] = syncMemberFromUser({ userId: user.id });
-        renderRotation("activity");
       }
 
       function updateActivityMemberField(index, field, value) {
@@ -939,8 +938,6 @@
           ...member,
           [field]: value
         };
-
-        renderRotation("activity");
       }
 
       function removeMember(type, index) {
