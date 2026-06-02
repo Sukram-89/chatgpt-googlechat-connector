@@ -11,7 +11,8 @@ import { createChatReply } from "../services/openaiChat";
 import {
   formatActivityDetails,
   formatRotationList,
-  formatRotationNow
+  formatRotationNow,
+  formatUpcomingActivities
 } from "../services/rotationMessages";
 import { getRotation, ROTATION_IDS } from "../services/rotationService";
 import { saveUser, slugifyUserId } from "../services/userService";
@@ -74,9 +75,7 @@ async function getCommandResponse(commandIdOrText: string) {
       {
         const rotation = await getRotation(ROTATION_IDS.ACTIVITY);
 
-        return `${formatRotationList("Activity", rotation)}\n${formatActivityDetails(
-          rotation
-        )}`;
+        return formatUpcomingActivities(rotation);
       }
 
     case COMMAND_IDS.ADMIN:

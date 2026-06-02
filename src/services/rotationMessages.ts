@@ -40,6 +40,41 @@ export function formatRotationList(label: string, rotation: RotationState) {
   )}\nNext: ${getMention(rotation.next)}`;
 }
 
+export function formatUpcomingActivities(rotation: RotationState) {
+  if (!rotation.members.length) {
+    return "Upcoming activities: no activities configured.";
+  }
+
+  const members = [...rotation.members]
+    .sort((a, b) => {
+      const aDate = a.activityDate || "";
+      const bDate = b.activityDate || "";
+
+      if (aDate !== bDate) {
+        return aDate.localeCompare(bDate);
+      }
+
+      const aName = a.activityName || "";
+      const bName = b.activityName || "";
+
+      if (aName !== bName) {
+        return aName.localeCompare(bName);
+      }
+
+      return getMention(a).localeCompare(getMention(b));
+    })
+    .map((member, index) => {
+      const name = member.activityName || "TBD";
+      const date = member.activityDate || "TBD";
+      const assignee = getMention(member);
+
+      return `${index + 1}. ${name}, ${date} ${assignee}`.trim();
+    })
+    .join("\n");
+
+  return `Upcoming activities:\n${members}`;
+}
+
 export function formatActivityDetails(rotation: RotationState) {
   return `Activity: ${rotation.activityName || "TBD"}\nActivity date: ${
     rotation.activityDate || "TBD"
