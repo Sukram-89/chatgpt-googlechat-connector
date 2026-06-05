@@ -23,8 +23,7 @@ export function getCurrentRotationMember(
   date = new Date()
 ): RotationMember | null {
   if (!config.members?.length) return null;
-  const index =
-    (date.getFullYear() * 12 + date.getMonth()) % config.members.length;
+  const index = date.getMonth() % config.members.length;
   return config.members[index];
 }
 
@@ -33,8 +32,7 @@ export function getNextRotationMember(
   date = new Date()
 ): RotationMember | null {
   if (!config.members?.length) return null;
-  const index =
-    (date.getFullYear() * 12 + date.getMonth() + 1) % config.members.length;
+  const index = (date.getMonth() + 1) % config.members.length;
   return config.members[index];
 }
 
